@@ -1,46 +1,35 @@
 #!/usr/bin/env bash
 # OpusDex phase execution functions
 
-# ─── Plan (Claude, read-only) ────────────────────────────────────────────────
+# ─── Plan (Claude, interactive) ──────────────────────────────────────────────
 
 phase_plan() {
     log_phase "plan"
 
-    local prompt_file
-    prompt_file="$(build_prompt "plan")"
+    local prompt_files system_prompt_file task_prompt_file
+    prompt_files="$(build_plan_prompts)"
+    system_prompt_file="$(echo "$prompt_files" | head -1)"
+    task_prompt_file="$(echo "$prompt_files" | tail -1)"
 
-    log_info "Invoking Claude Code for planning..."
+    log_info "Starting interactive planning session with Claude..."
+    log_info "Discuss the plan, then Claude will write todo.md. Exit with /exit or Ctrl+C when done."
+    echo ""
 
-    local output_file="$SESSION_TASK_DIR/plan_output.json"
-
-    "$CLAUDE_BIN" \
-        --print \
+    # Run from project dir so Claude auto-discovers .claude/agents/, .claude/skills/, CLAUDE.md
+    (cd "$PROJECT_PATH" && "$CLAUDE_BIN" \
         --model "$CLAUDE_MODEL" \
         --effort "$CLAUDE_EFFORT" \
         --dangerously-skip-permissions \
-        --add-dir "$PROJECT_PATH" \
-        --output-format json \
-        -p "$(cat "$prompt_file")" \
-        > "$output_file" 2>&1
+        --system-prompt "$(cat "$system_prompt_file")" \
+        -p "$(cat "$task_prompt_file")") || true
 
-    local exit_code=$?
-    rm -f "$prompt_file"
+    rm -f "$system_prompt_file" "$task_prompt_file"
 
-    if [[ $exit_code -ne 0 ]]; then
-        log_error "Claude planning failed (exit $exit_code)"
-        cat "$output_file" >&2
-        return 1
-    fi
-
-    # Extract result from JSON output
-    local result
-    result="$(jq -r '.result // .content // .' "$output_file" 2>/dev/null || cat "$output_file")"
-
-    # Check that todo.md was created
+    # Verify todo.md was produced
     if [[ ! -f "$SESSION_TASK_DIR/todo.md" ]]; then
-        # Claude may have output the plan as text instead of writing the file
-        log_warn "todo.md not found — writing Claude output as plan"
-        printf '%s\n' "$result" > "$SESSION_TASK_DIR/todo.md"
+        log_error "todo.md was not created during planning session"
+        log_info "Re-run with --phase plan to try again"
+        return 1
     fi
 
     log_success "Planning complete — see $SESSION_TASK_DIR/todo.md"
@@ -156,14 +145,14 @@ phase_review() {
 
     local output_file="$SESSION_TASK_DIR/review_output.json"
 
-    "$CLAUDE_BIN" \
+    # Run from project dir so Claude auto-discovers .claude/agents/, .claude/skills/, CLAUDE.md
+    (cd "$PROJECT_PATH" && "$CLAUDE_BIN" \
         --print \
         --model "$CLAUDE_MODEL" \
         --effort "$CLAUDE_EFFORT" \
         --dangerously-skip-permissions \
-        --add-dir "$PROJECT_PATH" \
         --output-format json \
-        -p "$(cat "$prompt_file")" \
+        -p "$(cat "$prompt_file")") \
         > "$output_file" 2>&1
 
     local exit_code=$?

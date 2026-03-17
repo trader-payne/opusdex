@@ -33,6 +33,9 @@ Session directory: `{{SESSION_TASK_DIR}}`
 4. **Do not push** — only commit locally.
 5. Run `git status` and `git diff --cached --stat` to verify before committing.
 
+## Project-Defined Agents & Skills
+If the project defines custom agents in `.codex/agents/` or skills in `.agents/skills/`, leverage them for specialized tasks like pre-commit validation.
+
 ## Quality Standard
 Would a staff engineer approve this commit message and scope? Each commit should be atomic and well-described.
 

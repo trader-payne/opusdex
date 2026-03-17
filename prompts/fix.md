@@ -25,10 +25,16 @@ Session directory: `{{SESSION_TASK_DIR}}`
 
 1. **Read the review** in `{{SESSION_TASK_DIR}}/review.md` carefully.
 2. **Read test results** in `{{SESSION_TASK_DIR}}/test_results.md` if tests failed.
-3. **Fix each issue** — address every critical finding and requested change.
+3. **Fix with parallel agents** — group independent issues and launch a separate agent for each group. For example:
+   - Fixes in different files that don't affect each other → parallel agents
+   - A bug fix and a style fix in unrelated modules → parallel agents
+   - Fixes where one change affects another's behavior → sequential
 4. **Do not introduce new features** — only fix what was flagged.
 5. **Run tests** after fixing to verify nothing is broken.
 6. You have full filesystem access. Modify files as needed in `{{PROJECT_PATH}}`.
+
+## Project-Defined Agents & Skills
+If the project defines custom agents in `.codex/agents/` or skills in `.agents/skills/`, leverage them for specialized tasks.
 
 ## Quality Standard
 Address every critical and requested change. The next review should be an APPROVE.

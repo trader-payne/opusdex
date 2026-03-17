@@ -92,10 +92,13 @@ git -C "$PROJECT_PATH" rev-parse --git-dir &>/dev/null || abort "Project is not 
 
 # ─── Session Setup ───────────────────────────────────────────────────────────
 
+PROJECT_DATA_DIR="$PROJECT_PATH/.opusdex"
 SESSION_ID="$(datestamp)"
-SESSION_TASK_DIR="$OPUSDEX_DIR/tasks/$SESSION_ID"
+SESSION_TASK_DIR="$PROJECT_DATA_DIR/tasks/$SESSION_ID"
+
+# Initialize per-project data directory structure
+init_project_data_dir
 ensure_dir "$SESSION_TASK_DIR"
-ensure_dir "$OPUSDEX_DIR/logs"
 
 BASELINE_COMMIT="$(git -C "$PROJECT_PATH" rev-parse HEAD)"
 SESSION_START=$(date +%s)
@@ -105,7 +108,7 @@ init_memory_files
 
 # ─── Logging Setup ───────────────────────────────────────────────────────────
 
-LOG_FILE="$OPUSDEX_DIR/logs/session_${SESSION_ID}.log"
+LOG_FILE="$PROJECT_DATA_DIR/logs/session_${SESSION_ID}.log"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
 # ─── Session Banner ──────────────────────────────────────────────────────────
@@ -193,7 +196,7 @@ finalize_session() {
     duration="$(duration_since "$SESSION_START")"
 
     # Write build log entry
-    cat >> "$OPUSDEX_DIR/builds/build_log.md" <<EOF
+    cat >> "$PROJECT_DATA_DIR/builds/build_log.md" <<EOF
 
 ## $(date '+%Y-%m-%d %H:%M') | $SESSION_ID
 **Task**: $TASK_DESCRIPTION
@@ -206,7 +209,7 @@ $changed_files
 EOF
 
     log_success "Session $SESSION_ID completed ($status) in $duration"
-    log_info "Build log updated: builds/build_log.md"
+    log_info "Build log updated: $PROJECT_DATA_DIR/builds/build_log.md"
     log_info "Session artifacts: $SESSION_TASK_DIR"
 }
 

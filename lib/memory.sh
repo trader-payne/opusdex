@@ -1,8 +1,32 @@
 #!/usr/bin/env bash
 # OpusDex memory management
 
+init_project_data_dir() {
+    ensure_dir "$PROJECT_DATA_DIR"
+    ensure_dir "$PROJECT_DATA_DIR/memory"
+    ensure_dir "$PROJECT_DATA_DIR/tasks"
+    ensure_dir "$PROJECT_DATA_DIR/builds"
+    ensure_dir "$PROJECT_DATA_DIR/logs"
+
+    # Create .gitignore if it doesn't exist
+    if [[ ! -f "$PROJECT_DATA_DIR/.gitignore" ]]; then
+        cat > "$PROJECT_DATA_DIR/.gitignore" <<'EOF'
+tasks/
+logs/
+*.tmp
+EOF
+    fi
+
+    # Seed build log if it doesn't exist
+    if [[ ! -f "$PROJECT_DATA_DIR/builds/build_log.md" ]]; then
+        cat > "$PROJECT_DATA_DIR/builds/build_log.md" <<'EOF'
+# OpusDex Build Log
+EOF
+    fi
+}
+
 init_memory_files() {
-    local memory_dir="${OPUSDEX_DIR}/memory"
+    local memory_dir="${PROJECT_DATA_DIR}/memory"
     ensure_dir "$memory_dir"
 
     if [[ ! -f "$memory_dir/claude_lessons.md" ]]; then
@@ -28,7 +52,7 @@ EOF
 }
 
 read_memory() {
-    local memory_dir="${OPUSDEX_DIR}/memory"
+    local memory_dir="${PROJECT_DATA_DIR}/memory"
     local output=""
 
     output+="<memory>"$'\n'
@@ -65,7 +89,7 @@ merge_session_lessons() {
         return 0
     fi
 
-    local memory_dir="${OPUSDEX_DIR}/memory"
+    local memory_dir="${PROJECT_DATA_DIR}/memory"
     local shared_file="$memory_dir/shared_context.md"
 
     # Extract rules from lessons file (lines starting with ### Rule:)

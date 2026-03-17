@@ -69,3 +69,34 @@ build_prompt() {
     # Write to temp file and return path
     write_prompt_to_tmpfile "$prompt"
 }
+
+# Build system prompt + task prompt for interactive plan phase.
+# Prints two temp file paths (system, task) separated by newline.
+build_plan_prompts() {
+    local system_template="${OPUSDEX_DIR}/prompts/plan_system.md"
+    local task_template="${OPUSDEX_DIR}/prompts/plan_task.md"
+
+    [[ -f "$system_template" ]] || abort "Prompt template not found: $system_template"
+    [[ -f "$task_template" ]] || abort "Prompt template not found: $task_template"
+
+    local memory_block
+    memory_block="$(read_memory)"
+
+    local system_prompt task_prompt
+    system_prompt="$(cat "$system_template")"
+    task_prompt="$(cat "$task_template")"
+
+    # Substitute placeholders in both
+    for var in system_prompt task_prompt; do
+        declare "$var"="${!var//\{\{MEMORY\}\}/$memory_block}"
+        declare "$var"="${!var//\{\{TASK\}\}/$TASK_DESCRIPTION}"
+        declare "$var"="${!var//\{\{PROJECT_PATH\}\}/$PROJECT_PATH}"
+        declare "$var"="${!var//\{\{SESSION_TASK_DIR\}\}/$SESSION_TASK_DIR}"
+    done
+
+    local system_file task_file
+    system_file="$(write_prompt_to_tmpfile "$system_prompt")"
+    task_file="$(write_prompt_to_tmpfile "$task_prompt")"
+
+    printf '%s\n%s' "$system_file" "$task_file"
+}
