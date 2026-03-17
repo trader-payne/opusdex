@@ -20,30 +20,49 @@ generate_uuid() {
 phase_plan() {
     log_phase "plan"
 
-    local prompt_files system_prompt_file task_prompt_file
-    prompt_files="$(build_plan_prompts)"
-    system_prompt_file="$(echo "$prompt_files" | head -1)"
-    task_prompt_file="$(echo "$prompt_files" | tail -1)"
+    if [[ -n "$CLAUDE_SESSION_ID" ]]; then
+        log_info "Resuming plan session: $CLAUDE_SESSION_ID"
+        log_info "Continue the discussion, then Claude will write todo.md. Exit with /exit when done."
+        echo ""
 
-    # Generate a session ID so we can resume this conversation in the review phase
-    CLAUDE_SESSION_ID="$(generate_uuid)"
-    echo "$CLAUDE_SESSION_ID" > "$SESSION_TASK_DIR/claude_session_id"
-    log_info "Claude session: $CLAUDE_SESSION_ID"
+        (cd "$PROJECT_PATH" && "$CLAUDE_BIN" \
+            --model "$CLAUDE_MODEL" \
+            --effort "$CLAUDE_EFFORT" \
+            --verbose \
+            --dangerously-skip-permissions \
+            --resume "$CLAUDE_SESSION_ID" \
+            "Let's continue. When ready, write the plan to $SESSION_TASK_DIR/todo.md." \
+            </dev/tty >/dev/tty 2>&1) || true
+    else
+        local prompt_files system_prompt_file task_prompt_file
+        prompt_files="$(build_plan_prompts)"
+        system_prompt_file="$(echo "$prompt_files" | head -1)"
+        task_prompt_file="$(echo "$prompt_files" | tail -1)"
 
-    log_info "Starting interactive planning session with Claude..."
-    log_info "Discuss the plan, then Claude will write todo.md. Exit with /exit or Ctrl+C when done."
-    echo ""
+        # Generate a session ID so we can resume this conversation in the review phase
+        CLAUDE_SESSION_ID="$(generate_uuid)"
+        echo "$CLAUDE_SESSION_ID" > "$SESSION_TASK_DIR/claude_session_id"
+        log_info "Claude session: $CLAUDE_SESSION_ID"
 
-    # Run from project dir so Claude auto-discovers .claude/agents/, .claude/skills/, CLAUDE.md
-    (cd "$PROJECT_PATH" && "$CLAUDE_BIN" \
-        --model "$CLAUDE_MODEL" \
-        --effort "$CLAUDE_EFFORT" \
-        --dangerously-skip-permissions \
-        --session-id "$CLAUDE_SESSION_ID" \
-        --system-prompt "$(cat "$system_prompt_file")" \
-        -p "$(cat "$task_prompt_file")") || true
+        log_info "Starting interactive planning session with Claude..."
+        log_info "Discuss the plan, then Claude will write todo.md. Exit with /exit or Ctrl+C when done."
+        echo ""
 
-    rm -f "$system_prompt_file" "$task_prompt_file"
+        # Attach Claude directly to the controlling terminal. The orchestrator's
+        # session-wide tee logging makes stdout non-TTY, which causes Claude to
+        # behave like a one-shot run instead of holding an interactive session.
+        (cd "$PROJECT_PATH" && "$CLAUDE_BIN" \
+            --model "$CLAUDE_MODEL" \
+            --effort "$CLAUDE_EFFORT" \
+            --verbose \
+            --dangerously-skip-permissions \
+            --session-id "$CLAUDE_SESSION_ID" \
+            --system-prompt "$(cat "$system_prompt_file")" \
+            "$(cat "$task_prompt_file")" \
+            </dev/tty >/dev/tty 2>&1) || true
+
+        rm -f "$system_prompt_file" "$task_prompt_file"
+    fi
 
     # Verify todo.md was produced
     if [[ ! -f "$SESSION_TASK_DIR/todo.md" ]]; then

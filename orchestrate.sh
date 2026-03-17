@@ -115,11 +115,28 @@ git -C "$PROJECT_PATH" rev-parse --git-dir &>/dev/null || abort "Project is not 
 # ─── Session Setup ───────────────────────────────────────────────────────────
 
 PROJECT_DATA_DIR="$PROJECT_PATH/.opusdex"
-SESSION_ID="$(datestamp)"
-SESSION_TASK_DIR="$PROJECT_DATA_DIR/tasks/$SESSION_ID"
 
 # Initialize per-project data directory structure
 init_project_data_dir
+
+SESSION_REUSED=false
+
+if [[ -n "$START_PHASE" ]]; then
+    # Resume: reuse the most recent session task dir so phase artifacts remain available.
+    latest="$(find "$PROJECT_DATA_DIR/tasks" -mindepth 1 -maxdepth 1 -type d | sort -r | head -1)"
+    if [[ -n "$latest" ]]; then
+        SESSION_TASK_DIR="$latest"
+        SESSION_ID="$(basename "$SESSION_TASK_DIR")"
+        SESSION_REUSED=true
+    else
+        SESSION_ID="$(datestamp)"
+        SESSION_TASK_DIR="$PROJECT_DATA_DIR/tasks/$SESSION_ID"
+    fi
+else
+    SESSION_ID="$(datestamp)"
+    SESSION_TASK_DIR="$PROJECT_DATA_DIR/tasks/$SESSION_ID"
+fi
+
 ensure_dir "$SESSION_TASK_DIR"
 
 BASELINE_COMMIT="$(git -C "$PROJECT_PATH" rev-parse HEAD)"
@@ -145,6 +162,7 @@ log_info "Baseline: $BASELINE_COMMIT"
 log_info "Claude:   $CLAUDE_MODEL (effort: $CLAUDE_EFFORT)"
 log_info "Codex:    $CODEX_MODEL (effort: $CODEX_EFFORT)"
 log_info "Auto-commit: $AUTO_COMMIT"
+[[ "$SESSION_REUSED" == true ]] && log_info "Resuming session: $SESSION_ID"
 [[ -n "$START_PHASE" ]] && log_info "Resuming from: $START_PHASE"
 echo ""
 
