@@ -71,10 +71,10 @@ All prompts instruct the AI to delegate to project-defined agents/skills when th
 All phase prompts instruct the AI to use these MCPs when the tools are available:
 
 - **Context7** — external library docs. `resolve-library-id` → `get-library-docs`.
-- **Codanna** — code intelligence (symbols, relationships, impact analysis). Supports: Rust, Python, TypeScript, JavaScript, Java, Kotlin, Go, PHP, C, C++, C#, Swift, GDScript. Requires the project to have Codanna indexed (`codanna init && codanna index .`) and an MCP server configured.
-- **Claude Context** — semantic code search (hybrid BM25 + vector). Supports: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala. Requires OpenAI API key + Zilliz Cloud for vector storage.
+- **Codanna** — code intelligence (symbols, relationships, impact analysis) + document search. Supports: Rust, Python, TypeScript, JavaScript, Java, Kotlin, Go, PHP, C, C++, C#, Swift, GDScript. Requires `codanna init && codanna index .` for code, and `codanna documents index` for docs. Document collections are configured in `.codanna/settings.toml` (`[documents]` section).
+- **Claude Context** — semantic code + documentation search (hybrid BM25 + vector). Indexes both code and markdown/docs (`.md`, `.markdown`, `.ipynb`) by default. Supports: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala. Requires OpenAI API key + Zilliz Cloud. Async indexing — `search_code` returns partial results while indexing.
 
-Each phase prompt lists which specific tools to use and when (e.g., `analyze_impact` during planning for risk assessment, `find_callers` during review for compatibility checks). Prompts say "skip any that aren't present" so phases work fine without the MCPs configured.
+Each phase prompt lists which specific tools to use and when (e.g., `analyze_impact` during planning for risk assessment, `search_documents` to check project docs for conventions, `search_code` to find both code and documentation). Prompts say "skip any that aren't present" so phases work fine without the MCPs configured.
 
 ## Conventions
 

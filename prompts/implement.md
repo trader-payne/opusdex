@@ -18,11 +18,13 @@ Use for projects in supported languages: Rust, Python, TypeScript, JavaScript, J
 - `find_callers` / `get_calls` — understand call chains before changing interfaces
 - `analyze_impact` — check what breaks before modifying a shared symbol
 - `semantic_search_with_context` — find existing implementations to follow patterns
+- `search_documents` — search project docs for design decisions, conventions, or constraints that should guide implementation (e.g., `query:"coding standards" collection:docs`)
 
 ### Claude Context (Semantic Code Search)
 Use for projects in supported languages: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala.
-- `search_code` — find related code, similar patterns, or existing implementations before writing new code
-- `index_codebase` — index the project first if `search_code` returns no results
+Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
+- `search_code` — find related code, similar patterns, existing implementations, and relevant documentation before writing new code
+- `index_codebase` — index the project first if `search_code` returns no results. Indexing is async — search immediately for partial results while it completes.
 
 ## Plan
 {{CONTEXT}}

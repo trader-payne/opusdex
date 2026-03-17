@@ -16,12 +16,15 @@ Use for projects in supported languages: Rust, Python, TypeScript, JavaScript, J
 - `analyze_impact` — map what breaks when a symbol changes; use this to populate the Risks section of the plan
 - `find_symbol` / `find_callers` / `get_calls` — trace call chains to understand how components connect
 - `search_symbols` — fuzzy match to locate symbols by name pattern
+- `search_documents` — search project documentation (markdown, text) indexed via Codanna's document collections (e.g., `query:"architecture" collection:docs limit:5`). Use this to review existing docs, ADRs, and READMEs before proposing changes.
+- `get_index_info` — check what's indexed (languages, symbol counts, collections) to confirm the index is up to date
 
 ### Claude Context (Semantic Code Search)
 Use for projects in supported languages: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala.
-- `search_code` — broad semantic search across the entire codebase; use this during initial exploration to find relevant code fast
-- `index_codebase` — index the project first if `search_code` returns no results
-- `get_indexing_status` — check indexing progress before retrying search
+Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
+- `search_code` — broad semantic search across code and docs; use this during initial exploration to find relevant code and documentation fast
+- `index_codebase` — index the project first if `search_code` returns no results. Accepts `customExtensions` (e.g., `[".vue", ".svelte"]`) for non-default file types. Indexing is async — you can search immediately for partial results.
+- `get_indexing_status` — check indexing progress; states: `indexed` (ready), `indexing` (in progress, partial search works), `indexfailed` (retry), `not_found` (needs indexing)
 
 ## Environment
 - Working directory: `{{PROJECT_PATH}}`

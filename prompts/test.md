@@ -17,11 +17,13 @@ Use for projects in supported languages: Rust, Python, TypeScript, JavaScript, J
 - `find_callers` — discover all callers of changed code to know what needs test coverage
 - `analyze_impact` — map the blast radius of changes to identify what else to test
 - `semantic_search_with_context` — find existing test patterns in the codebase (e.g., `query:"test" lang:python`)
+- `search_documents` — find testing guidelines, conventions, or required test patterns in project docs (e.g., `query:"testing requirements"`)
 
 ### Claude Context (Semantic Code Search)
 Use for projects in supported languages: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala.
-- `search_code` — find existing tests, test helpers, fixtures, and factories to reuse
-- `index_codebase` — index the project first if `search_code` returns no results
+Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
+- `search_code` — find existing tests, test helpers, fixtures, factories, and testing documentation to reuse
+- `index_codebase` — index the project first if `search_code` returns no results. Indexing is async — search immediately for partial results.
 
 ## Task
 {{TASK}}

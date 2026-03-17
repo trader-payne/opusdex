@@ -18,10 +18,12 @@ Use for projects in supported languages: Rust, Python, TypeScript, JavaScript, J
 - `find_callers` — check all callers of a modified function to confirm they're still compatible
 - `find_symbol` — look up exact signatures to verify correct usage in the diff
 - `semantic_search_with_context` — find similar patterns to check for consistency
+- `search_documents` — check if changes contradict documented design decisions, ADRs, or conventions (e.g., `query:"API contract" collection:docs`)
 
 ### Claude Context (Semantic Code Search)
 Use for projects in supported languages: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala.
-- `search_code` — find related code that might be affected by the changes but isn't in the diff
+Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
+- `search_code` — find related code and documentation that might be affected by the changes but isn't in the diff
 
 ## Task
 {{TASK}}

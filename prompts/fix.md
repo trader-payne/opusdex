@@ -17,10 +17,12 @@ Use for projects in supported languages: Rust, Python, TypeScript, JavaScript, J
 - `find_symbol` — look up exact signatures of functions you need to fix or call
 - `find_callers` / `get_calls` — understand the call chain around a bug before patching
 - `analyze_impact` — verify your fix won't break other consumers
+- `search_documents` — check project docs for constraints or conventions relevant to the fix
 
 ### Claude Context (Semantic Code Search)
 Use for projects in supported languages: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala.
-- `search_code` — find similar patterns or prior fixes for the same kind of issue
+Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
+- `search_code` — find similar patterns, prior fixes, and relevant documentation for the same kind of issue
 
 ## Task
 {{TASK}}

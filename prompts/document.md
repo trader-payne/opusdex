@@ -16,11 +16,12 @@ Call `resolve-library-id` first, then `get-library-docs` to verify documented AP
 Use for projects in supported languages: Rust, Python, TypeScript, JavaScript, Java, Kotlin, Go, PHP, C, C++, C#, Swift, GDScript.
 - `find_symbol` — get accurate signatures, parameter types, and existing docstrings for symbols to document
 - `find_callers` / `get_calls` — understand usage patterns to write better usage examples in docs
-- `search_documents` — find existing documentation to update rather than duplicate
+- `search_documents` — find existing documentation to update rather than duplicate; check all doc collections for stale content that needs updating (e.g., `query:"API reference" collection:docs`)
 
 ### Claude Context (Semantic Code Search)
 Use for projects in supported languages: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala.
-- `search_code` — find undocumented public APIs and code that needs doc updates
+Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
+- `search_code` — find undocumented public APIs, outdated documentation that conflicts with current code, and existing docs to update
 
 ## Task
 {{TASK}}
