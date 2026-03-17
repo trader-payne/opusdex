@@ -25,6 +25,7 @@ Task can be provided as:
 Options:
   --project PATH         Target project directory (required)
   --task-file FILE       Read task description from a file
+  --auto-plan            Skip plan confirmation prompt
   --auto-commit          Skip commit confirmation prompt
   --phase PHASE          Resume from a specific phase
                          (plan|build|review|document|commit)
@@ -52,6 +53,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --task-file)
             TASK_FILE="$2"; shift 2
+            ;;
+        --auto-plan)
+            AUTO_PLAN=true; shift
             ;;
         --auto-commit)
             AUTO_COMMIT=true; shift
@@ -161,6 +165,7 @@ log_info "Project:  $PROJECT_PATH"
 log_info "Baseline: $BASELINE_COMMIT"
 log_info "Claude:   $CLAUDE_MODEL (effort: $CLAUDE_EFFORT)"
 log_info "Codex:    $CODEX_MODEL (effort: $CODEX_EFFORT)"
+log_info "Auto-plan: $AUTO_PLAN"
 log_info "Auto-commit: $AUTO_COMMIT"
 [[ "$SESSION_REUSED" == true ]] && log_info "Resuming session: $SESSION_ID"
 [[ -n "$START_PHASE" ]] && log_info "Resuming from: $START_PHASE"

@@ -72,6 +72,19 @@ phase_plan() {
     fi
 
     log_success "Planning complete — see $SESSION_TASK_DIR/todo.md"
+
+    # Plan approval gate
+    if [[ "$AUTO_PLAN" != "true" ]]; then
+        echo ""
+        log_info "Plan produced — review it at: $SESSION_TASK_DIR/todo.md"
+        echo ""
+        if ! confirm "Approve plan and proceed to build?"; then
+            log_warn "Plan not approved — aborting"
+            log_info "Re-run with --phase plan to revise"
+            return 1
+        fi
+    fi
+
     return 0
 }
 
