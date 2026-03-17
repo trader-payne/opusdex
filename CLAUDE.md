@@ -11,7 +11,7 @@ lib/utils.sh            → Shell utilities (dirs, timestamps, prompts, confirma
 lib/logging.sh          → Color-coded phase logging
 lib/memory.sh           → Persistent lesson memory (read/write/merge), per-project data init
 lib/prompts.sh          → Prompt template assembly with placeholder substitution
-lib/phases.sh           → 7 phase functions (plan/implement/test/review/fix/document/commit)
+lib/phases.sh           → 5 phase functions (plan/build/review/document/commit)
 prompts/*.md            → Phase prompt templates with {{PLACEHOLDER}} variables
 ```
 
@@ -37,12 +37,25 @@ Memory, sessions, and build logs are per-project. Code and prompt templates rema
 ## Workflow Phases
 
 1. **Plan** (Claude, interactive) — Discuss and refine approach with user, produce `todo.md`
-2. **Implement** (Codex, write) — Execute the plan
-3. **Test** (Codex, write) — Run and write tests, retry up to TEST_RETRY_LIMIT
-4. **Review** (Claude, read-only) — Code review with verdict (APPROVE/REQUEST_CHANGES/BLOCK)
-5. **Fix** (Codex, write) — Address review feedback (if needed)
-6. **Document** (Codex, write) — Update documentation
-7. **Commit** (Codex, write) — Stage and commit (gated on approval)
+2. **Build** (Codex, single session) — Implement the plan + run/write tests + fix failures, all in one `codex exec` call so Codex retains full implementation context during testing
+3. **Review** (Claude, continues plan session) — Code review with verdict (APPROVE/REQUEST_CHANGES/BLOCK). Uses `--resume` to continue the plan conversation, so Claude retains all codebase understanding from planning.
+   - If REQUEST_CHANGES/BLOCK → **Fix & Retest** (Codex, single session) — fix + retest in one call → re-review
+4. **Document** (Codex, write) — Update documentation
+5. **Commit** (Codex, write) — Stage and commit (gated on approval)
+
+### Session Continuity
+
+```
+Claude session:  plan ──────────────────────► review ──────► re-review
+                   │                            ▲  │            ▲
+                   │  (file handoff)            │  │            │
+                   ▼                            │  ▼            │
+Codex session:   build (impl+test) ─────────────┘  fix+retest──┘
+```
+
+- **Claude**: plan and review share a conversation via `--session-id` / `--resume`. The review phase has full context from planning (codebase exploration, architecture understanding).
+- **Codex**: build = implement + test + inline fix in one `codex exec` call. Fix & retest = fix + test in one call. Each retains full context within its session.
+- **Handoff**: file-based (`todo.md`, `test_results.md`, `review.md`) only at the Claude↔Codex boundary.
 
 ## Running
 

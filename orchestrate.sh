@@ -27,7 +27,7 @@ Options:
   --task-file FILE       Read task description from a file
   --auto-commit          Skip commit confirmation prompt
   --phase PHASE          Resume from a specific phase
-                         (plan|implement|test|review|fix|document|commit)
+                         (plan|build|review|document|commit)
   --claude-model MODEL   Override Claude model (default: opus)
   --claude-effort LEVEL  Override Claude effort (default: high)
   --codex-model MODEL    Override Codex model (default: chatgpt-5.4)
@@ -153,11 +153,23 @@ printf '%s\n' "$TASK_DESCRIPTION" > "$SESSION_TASK_DIR/task.txt"
 
 # ─── Phase Execution ─────────────────────────────────────────────────────────
 
-PHASES=(plan implement test review document commit)
-SKIP=true
+PHASES=(plan build review document commit)
 
+# Backward-compat: map old phase names
+case "${START_PHASE:-}" in
+    implement|test) START_PHASE="build" ;;
+    fix)            START_PHASE="review" ;;
+esac
+
+SKIP=true
 if [[ -z "$START_PHASE" ]]; then
     SKIP=false
+fi
+
+# Try to recover Claude session ID from a previous plan phase in this session dir
+if [[ -f "$SESSION_TASK_DIR/claude_session_id" ]]; then
+    CLAUDE_SESSION_ID="$(cat "$SESSION_TASK_DIR/claude_session_id")"
+    log_info "Recovered Claude session: $CLAUDE_SESSION_ID"
 fi
 
 run_phase() {
@@ -176,11 +188,8 @@ run_phase() {
         plan)
             phase_plan || abort "Plan phase failed"
             ;;
-        implement)
-            phase_implement || abort "Implement phase failed"
-            ;;
-        test)
-            phase_test_with_retries || abort "Test phase failed after retries"
+        build)
+            phase_build || abort "Build phase failed"
             ;;
         review)
             phase_review_with_gate || abort "Review phase did not approve"

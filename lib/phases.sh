@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 # OpusDex phase execution functions
+#
+# Session continuity:
+#   Claude: plan and review share a conversation via --session-id / --resume
+#   Codex:  build (implement+test) is one exec call; fix_and_retest is one exec call
+
+# ─── Session State ──────────────────────────────────────────────────────────
+
+CLAUDE_SESSION_ID=""
+
+generate_uuid() {
+    cat /proc/sys/kernel/random/uuid 2>/dev/null \
+        || uuidgen 2>/dev/null \
+        || python3 -c 'import uuid; print(uuid.uuid4())'
+}
 
 # ─── Plan (Claude, interactive) ──────────────────────────────────────────────
 
@@ -11,6 +25,11 @@ phase_plan() {
     system_prompt_file="$(echo "$prompt_files" | head -1)"
     task_prompt_file="$(echo "$prompt_files" | tail -1)"
 
+    # Generate a session ID so we can resume this conversation in the review phase
+    CLAUDE_SESSION_ID="$(generate_uuid)"
+    echo "$CLAUDE_SESSION_ID" > "$SESSION_TASK_DIR/claude_session_id"
+    log_info "Claude session: $CLAUDE_SESSION_ID"
+
     log_info "Starting interactive planning session with Claude..."
     log_info "Discuss the plan, then Claude will write todo.md. Exit with /exit or Ctrl+C when done."
     echo ""
@@ -20,6 +39,7 @@ phase_plan() {
         --model "$CLAUDE_MODEL" \
         --effort "$CLAUDE_EFFORT" \
         --dangerously-skip-permissions \
+        --session-id "$CLAUDE_SESSION_ID" \
         --system-prompt "$(cat "$system_prompt_file")" \
         -p "$(cat "$task_prompt_file")") || true
 
@@ -36,17 +56,17 @@ phase_plan() {
     return 0
 }
 
-# ─── Implement (Codex, write) ────────────────────────────────────────────────
+# ─── Build (Codex, implement + test in one session) ─────────────────────────
 
-phase_implement() {
-    log_phase "implement"
+phase_build() {
+    log_phase "build"
 
     local prompt_file
-    prompt_file="$(build_prompt "implement")"
+    prompt_file="$(build_prompt "build")"
 
-    log_info "Invoking Codex for implementation..."
+    log_info "Invoking Codex for implementation + testing..."
 
-    local output_file="$SESSION_TASK_DIR/implement_output.md"
+    local output_file="$SESSION_TASK_DIR/build_output.md"
 
     "$CODEX_BIN" exec \
         -m "$CODEX_MODEL" \
@@ -61,79 +81,24 @@ phase_implement() {
     rm -f "$prompt_file"
 
     if [[ $exit_code -ne 0 ]]; then
-        log_error "Codex implementation failed (exit $exit_code)"
+        log_error "Codex build failed (exit $exit_code)"
         [[ -f "$output_file" ]] && cat "$output_file" >&2
         return 1
     fi
 
-    log_success "Implementation complete"
-    return 0
-}
-
-# ─── Test (Codex, write) ─────────────────────────────────────────────────────
-
-phase_test() {
-    log_phase "test"
-
-    local prompt_file
-    prompt_file="$(build_prompt "test")"
-
-    log_info "Invoking Codex for testing..."
-
-    local output_file="$SESSION_TASK_DIR/test_output.md"
-
-    "$CODEX_BIN" exec \
-        -m "$CODEX_MODEL" \
-        -c model_reasoning_effort="$CODEX_EFFORT" \
-        $CODEX_YOLO_FLAG \
-        -C "$PROJECT_PATH" \
-        -o "$output_file" \
-        "$(cat "$prompt_file")" \
-        2>&1
-
-    local exit_code=$?
-    rm -f "$prompt_file"
-
-    if [[ $exit_code -ne 0 ]]; then
-        log_error "Codex testing failed (exit $exit_code)"
-        [[ -f "$output_file" ]] && cat "$output_file" >&2
-        return 1
-    fi
-
-    # Check verdict in test_results.md
+    # Check test verdict
     if [[ -f "$SESSION_TASK_DIR/test_results.md" ]]; then
         if grep -qi "Verdict:.*FAIL" "$SESSION_TASK_DIR/test_results.md"; then
-            log_warn "Tests reported FAIL verdict"
+            log_warn "Tests reported FAIL verdict after build"
             return 1
         fi
     fi
 
-    log_success "Testing complete"
+    log_success "Build complete (implementation + tests passed)"
     return 0
 }
 
-# ─── Test with retry loop ────────────────────────────────────────────────────
-
-phase_test_with_retries() {
-    local attempt
-    for attempt in $(seq 1 "$TEST_RETRY_LIMIT"); do
-        log_info "Test attempt $attempt of $TEST_RETRY_LIMIT"
-
-        if phase_test; then
-            return 0
-        fi
-
-        if [[ $attempt -lt $TEST_RETRY_LIMIT ]]; then
-            log_warn "Tests failed — running fix-tests pass..."
-            phase_fix || true
-        fi
-    done
-
-    log_error "Tests failed after $TEST_RETRY_LIMIT attempts"
-    return 1
-}
-
-# ─── Review (Claude, read-only) ──────────────────────────────────────────────
+# ─── Review (Claude, continues plan session) ────────────────────────────────
 
 phase_review() {
     log_phase "review"
@@ -145,14 +110,24 @@ phase_review() {
 
     local output_file="$SESSION_TASK_DIR/review_output.json"
 
+    # Build Claude args — resume plan session if available for full context continuity
+    local -a claude_args=(
+        --print
+        --model "$CLAUDE_MODEL"
+        --effort "$CLAUDE_EFFORT"
+        --dangerously-skip-permissions
+        --output-format json
+    )
+
+    if [[ -n "$CLAUDE_SESSION_ID" ]]; then
+        claude_args+=(--resume "$CLAUDE_SESSION_ID")
+        log_info "Continuing Claude plan session for review context"
+    fi
+
+    claude_args+=(-p "$(cat "$prompt_file")")
+
     # Run from project dir so Claude auto-discovers .claude/agents/, .claude/skills/, CLAUDE.md
-    (cd "$PROJECT_PATH" && "$CLAUDE_BIN" \
-        --print \
-        --model "$CLAUDE_MODEL" \
-        --effort "$CLAUDE_EFFORT" \
-        --dangerously-skip-permissions \
-        --output-format json \
-        -p "$(cat "$prompt_file")") \
+    (cd "$PROJECT_PATH" && "$CLAUDE_BIN" "${claude_args[@]}") \
         > "$output_file" 2>&1
 
     local exit_code=$?
@@ -206,23 +181,12 @@ phase_review_with_gate() {
 
         case $verdict in
             0) return 0 ;; # APPROVE
-            2) # REQUEST_CHANGES
+            2|3) # REQUEST_CHANGES or BLOCK
                 if [[ $attempt -lt $REVIEW_RETRY_LIMIT ]]; then
-                    log_info "Running fix pass for review feedback..."
-                    phase_fix || true
-                    phase_test_with_retries || true
+                    log_info "Running fix + retest pass..."
+                    phase_fix_and_retest || true
                 else
-                    log_error "Review still requesting changes after $REVIEW_RETRY_LIMIT fix attempts"
-                    return 1
-                fi
-                ;;
-            3) # BLOCK
-                if [[ $attempt -lt $REVIEW_RETRY_LIMIT ]]; then
-                    log_warn "Review BLOCKED — attempting fix..."
-                    phase_fix || true
-                    phase_test_with_retries || true
-                else
-                    log_error "Review still BLOCKED after fix attempt"
+                    log_error "Review not approved after $REVIEW_RETRY_LIMIT fix attempts"
                     return 1
                 fi
                 ;;
@@ -233,15 +197,15 @@ phase_review_with_gate() {
     return 1
 }
 
-# ─── Fix (Codex, write) ─────────────────────────────────────────────────────
+# ─── Fix & Retest (Codex, fix + test in one session) ────────────────────────
 
-phase_fix() {
+phase_fix_and_retest() {
     log_phase "fix"
 
     local prompt_file
-    prompt_file="$(build_prompt "fix")"
+    prompt_file="$(build_prompt "fix_and_retest")"
 
-    log_info "Invoking Codex for fixes..."
+    log_info "Invoking Codex for fixes + retesting..."
 
     local output_file="$SESSION_TASK_DIR/fix_output.md"
 
@@ -263,7 +227,7 @@ phase_fix() {
         return 1
     fi
 
-    log_success "Fix pass complete"
+    log_success "Fix + retest complete"
     return 0
 }
 

@@ -26,16 +26,16 @@ build_prompt() {
     # Inject session task dir
     prompt="${prompt//\{\{SESSION_TASK_DIR\}\}/$SESSION_TASK_DIR}"
 
-    # Inject context (todo.md for implement/fix, test_results.md for review)
+    # Inject context (todo.md for build, test_results.md for review/fix_and_retest)
     local context=""
     case "$phase" in
-        implement)
+        build)
             [[ -f "$SESSION_TASK_DIR/todo.md" ]] && context="$(cat "$SESSION_TASK_DIR/todo.md")"
             ;;
         review)
             [[ -f "$SESSION_TASK_DIR/test_results.md" ]] && context="$(cat "$SESSION_TASK_DIR/test_results.md")"
             ;;
-        fix)
+        fix_and_retest)
             [[ -f "$SESSION_TASK_DIR/test_results.md" ]] && context="$(cat "$SESSION_TASK_DIR/test_results.md")"
             ;;
     esac
