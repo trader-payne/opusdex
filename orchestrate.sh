@@ -15,10 +15,16 @@ source "$SCRIPT_DIR/lib/phases.sh"
 
 usage() {
     cat <<'EOF'
-Usage: orchestrate.sh "task description" --project /path [options]
+Usage: orchestrate.sh <task> --project /path [options]
+
+Task can be provided as:
+  "task description"       Inline string
+  --task-file FILE         Read task from a file (markdown, text, etc.)
+  path/to/file.md          Positional arg that is an existing file is read automatically
 
 Options:
   --project PATH         Target project directory (required)
+  --task-file FILE       Read task description from a file
   --auto-commit          Skip commit confirmation prompt
   --phase PHASE          Resume from a specific phase
                          (plan|implement|test|review|fix|document|commit)
@@ -32,6 +38,7 @@ EOF
 }
 
 TASK_DESCRIPTION=""
+TASK_FILE=""
 PROJECT_PATH=""
 START_PHASE=""
 
@@ -42,6 +49,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --project)
             PROJECT_PATH="$2"; shift 2
+            ;;
+        --task-file)
+            TASK_FILE="$2"; shift 2
             ;;
         --auto-commit)
             AUTO_COMMIT=true; shift
@@ -74,9 +84,21 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# ─── Resolve Task Description ───────────────────────────────────────────────
+
+# --task-file takes priority
+if [[ -n "$TASK_FILE" ]]; then
+    [[ -f "$TASK_FILE" ]] || abort "Task file does not exist: $TASK_FILE"
+    TASK_DESCRIPTION="$(cat "$TASK_FILE")"
+# Positional arg that is an existing file → read it
+elif [[ -n "$TASK_DESCRIPTION" && -f "$TASK_DESCRIPTION" ]]; then
+    TASK_FILE="$TASK_DESCRIPTION"
+    TASK_DESCRIPTION="$(cat "$TASK_FILE")"
+fi
+
 # ─── Validation ──────────────────────────────────────────────────────────────
 
-[[ -z "$TASK_DESCRIPTION" ]] && abort "Task description is required (first argument)"
+[[ -z "$TASK_DESCRIPTION" ]] && abort "Task description is required (first argument or --task-file)"
 [[ -z "$PROJECT_PATH" ]] && abort "--project is required"
 [[ -d "$PROJECT_PATH" ]] || abort "Project directory does not exist: $PROJECT_PATH"
 
