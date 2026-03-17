@@ -66,6 +66,16 @@ Spawned processes auto-discover agents and skills defined in the target project:
 
 All prompts instruct the AI to delegate to project-defined agents/skills when they match the task.
 
+## MCP Integrations
+
+All phase prompts instruct the AI to use these MCPs when the tools are available:
+
+- **Context7** — external library docs. `resolve-library-id` → `get-library-docs`.
+- **Codanna** — code intelligence (symbols, relationships, impact analysis). Supports: Rust, Python, TypeScript, JavaScript, Java, Kotlin, Go, PHP, C, C++, C#, Swift, GDScript. Requires the project to have Codanna indexed (`codanna init && codanna index .`) and an MCP server configured.
+- **Claude Context** — semantic code search (hybrid BM25 + vector). Supports: TypeScript, JavaScript, Python, Java, C++, C#, Go, Rust, PHP, Ruby, Swift, Kotlin, Scala. Requires OpenAI API key + Zilliz Cloud for vector storage.
+
+Each phase prompt lists which specific tools to use and when (e.g., `analyze_impact` during planning for risk assessment, `find_callers` during review for compatibility checks). Prompts say "skip any that aren't present" so phases work fine without the MCPs configured.
+
 ## Conventions
 
 - All lib files are sourced, not executed — they define functions only.
