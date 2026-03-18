@@ -23,8 +23,6 @@ All session data lives in `$PROJECT_PATH/.opusdex/`:
 myapp/.opusdex/
 ├── .gitignore          # ignores tasks/, logs/, *.tmp
 ├── memory/
-│   ├── claude_lessons.md
-│   ├── codex_lessons.md
 │   └── shared_context.md
 ├── tasks/<session_id>/
 ├── builds/

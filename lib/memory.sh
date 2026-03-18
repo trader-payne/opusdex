@@ -29,20 +29,6 @@ init_memory_files() {
     local memory_dir="${PROJECT_DATA_DIR}/memory"
     ensure_dir "$memory_dir"
 
-    if [[ ! -f "$memory_dir/claude_lessons.md" ]]; then
-        cat > "$memory_dir/claude_lessons.md" <<'EOF'
-# Claude Code Lessons
-> Reviewed at session start. Write rules that prevent repeated mistakes.
-EOF
-    fi
-
-    if [[ ! -f "$memory_dir/codex_lessons.md" ]]; then
-        cat > "$memory_dir/codex_lessons.md" <<'EOF'
-# Codex Lessons
-> Reviewed at session start. Write rules that prevent repeated mistakes.
-EOF
-    fi
-
     if [[ ! -f "$memory_dir/shared_context.md" ]]; then
         cat > "$memory_dir/shared_context.md" <<'EOF'
 # Shared Context
@@ -55,27 +41,9 @@ read_memory() {
     local memory_dir="${PROJECT_DATA_DIR}/memory"
     local output=""
 
-    output+="<memory>"$'\n'
-
-    if [[ -f "$memory_dir/claude_lessons.md" ]]; then
-        output+="<claude-lessons>"$'\n'
-        output+="$(cat "$memory_dir/claude_lessons.md")"$'\n'
-        output+="</claude-lessons>"$'\n'
-    fi
-
-    if [[ -f "$memory_dir/codex_lessons.md" ]]; then
-        output+="<codex-lessons>"$'\n'
-        output+="$(cat "$memory_dir/codex_lessons.md")"$'\n'
-        output+="</codex-lessons>"$'\n'
-    fi
-
     if [[ -f "$memory_dir/shared_context.md" ]]; then
-        output+="<shared-context>"$'\n'
-        output+="$(cat "$memory_dir/shared_context.md")"$'\n'
-        output+="</shared-context>"$'\n'
+        output="$(cat "$memory_dir/shared_context.md")"
     fi
-
-    output+="</memory>"
 
     printf '%s' "$output"
 }
@@ -121,7 +89,7 @@ merge_session_lessons() {
             if [[ "$in_rule" == true && -n "$current_block" ]]; then
                 if ! grep -qF "$current_rule" "$shared_file" 2>/dev/null; then
                     printf '\n%s' "$current_block" >> "$shared_file"
-                    ((added++))
+                    added=$((added + 1))
                 fi
             fi
             current_rule="$line"
@@ -136,7 +104,7 @@ merge_session_lessons() {
     if [[ "$in_rule" == true && -n "$current_block" ]]; then
         if ! grep -qF "$current_rule" "$shared_file" 2>/dev/null; then
             printf '\n%s' "$current_block" >> "$shared_file"
-            ((added++))
+            added=$((added + 1))
         fi
     fi
 

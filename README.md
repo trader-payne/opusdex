@@ -194,21 +194,7 @@ The current placeholder sources are:
 
 Memory management lives in [`lib/memory.sh`](/root/github/opusdex/lib/memory.sh).
 
-Each target project gets three memory files:
-
-- `memory/claude_lessons.md`
-- `memory/codex_lessons.md`
-- `memory/shared_context.md`
-
-At prompt-build time, all three are wrapped into a single XML-like block:
-
-```text
-<memory>
-  <claude-lessons>...</claude-lessons>
-  <codex-lessons>...</codex-lessons>
-  <shared-context>...</shared-context>
-</memory>
-```
+Each target project gets a shared memory file — `memory/shared_context.md` — injected into every prompt via `{{MEMORY}}`.
 
 At session finalization, OpusDex looks for `lessons.md` in the session directory. Any sections beginning with `### Rule:` are appended to `shared_context.md` if they are not already present.
 
@@ -234,8 +220,6 @@ The orchestrator keeps project-specific state under:
 ├── logs/
 │   └── session_<session_id>.log
 ├── memory/
-│   ├── claude_lessons.md
-│   ├── codex_lessons.md
 │   └── shared_context.md
 └── tasks/
     └── <session_id>/

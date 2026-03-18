@@ -51,15 +51,22 @@ build_prompt() {
     fi
     prompt="${prompt//\{\{CHANGES\}\}/$changes}"
 
-    # Inject diff
+    # Inject diff summary (--stat + --name-only, not the full diff)
     local diff=""
     if [[ -n "${BASELINE_COMMIT:-}" ]]; then
-        diff="$(git -C "$PROJECT_PATH" diff "$BASELINE_COMMIT" HEAD 2>/dev/null || true)"
-        if [[ -z "$diff" ]]; then
-            diff="$(git -C "$PROJECT_PATH" diff 2>/dev/null || true)"
+        local stat names
+        stat="$(git -C "$PROJECT_PATH" diff --stat "$BASELINE_COMMIT" HEAD 2>/dev/null || true)"
+        names="$(git -C "$PROJECT_PATH" diff --name-only "$BASELINE_COMMIT" HEAD 2>/dev/null || true)"
+        if [[ -z "$stat" ]]; then
+            stat="$(git -C "$PROJECT_PATH" diff --stat 2>/dev/null || true)"
+            names="$(git -C "$PROJECT_PATH" diff --name-only 2>/dev/null || true)"
         fi
+        diff="### Files changed"$'\n'"$names"$'\n\n'"### Diffstat"$'\n'"$stat"
     fi
     prompt="${prompt//\{\{DIFF\}\}/$diff}"
+
+    # Inject baseline commit ref
+    prompt="${prompt//\{\{BASELINE_COMMIT\}\}/${BASELINE_COMMIT:-HEAD~1}}"
 
     # Inject review feedback
     local review=""

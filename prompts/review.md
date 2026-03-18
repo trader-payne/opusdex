@@ -28,8 +28,10 @@ Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
 ## Task
 {{TASK}}
 
-## Diff
+## Changed Files
 {{DIFF}}
+
+Use `git diff {{BASELINE_COMMIT}} HEAD -- <file>` to inspect the full diff for specific files you need to review closely. Prioritize files with the most changes or highest risk based on the diffstat.
 
 ## Test Results
 {{CONTEXT}}
@@ -40,7 +42,7 @@ Session directory: `{{SESSION_TASK_DIR}}`
 
 ## Instructions
 
-1. **Review the diff** — examine every changed line. When the diff spans multiple modules, launch parallel agents to review each module simultaneously.
+1. **Review the changes** — use the diffstat to prioritize, then run `git diff {{BASELINE_COMMIT}} HEAD -- <file>` for each file that warrants close inspection. When changes span multiple modules, launch parallel agents to review each module simultaneously.
 2. **Check for** (use parallel agents for independent review concerns):
    - Correctness: Does the code do what the task requires?
    - Security: Any injection, XSS, SSRF, or other OWASP top-10 issues?
