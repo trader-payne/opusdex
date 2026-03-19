@@ -1,6 +1,6 @@
 # OpusDex
 
-OpusDex is a Bash-based AI development orchestrator. It runs a target Git repository through a structured workflow that combines Claude Code CLI for planning and review with OpenAI Codex CLI for implementation, testing, documentation, and commit creation.
+OpusDex is a Bash-based AI development orchestrator. It runs a target Git repository through a structured workflow that combines Claude Code CLI for planning and review, OpenAI Codex CLI for implementation/testing/documentation/commit creation, and an optional Gemini CLI live-validation pass.
 
 The orchestrator itself lives in this repository. Session state, memory, logs, and build history are written into the target project under `.opusdex/`, so each project keeps its own execution history.
 
@@ -8,7 +8,7 @@ The orchestrator itself lives in this repository. Session state, memory, logs, a
 
 - Starts from a task description and a target project path.
 - Creates a per-project working area for plans, outputs, logs, memory, and build history.
-- Runs a repeatable phase pipeline across two AI CLIs.
+- Runs a repeatable phase pipeline across multiple AI CLIs.
 - Preserves session artifacts for later inspection or phase resumption.
 - Encourages project-specific agent and skill discovery from the target repository.
 - Records reusable "lessons" across sessions.
@@ -30,32 +30,35 @@ The main entry point is [`orchestrate.sh`](/root/github/opusdex/orchestrate.sh).
 The current top-level phase order is:
 
 1. `plan`
-2. `implement`
-3. `test`
-4. `review`
+2. `build`
+3. `review`
+4. `live`
 5. `document`
 6. `commit`
 
-There is also a `fix` phase implemented in [`lib/phases.sh`](/root/github/opusdex/lib/phases.sh), but it is invoked internally during retry loops rather than as part of the normal top-level phase list.
+`review` is the normal entrypoint into the review/live workflow. The separate `live` phase slot exists so interrupted sessions can resume directly into the live-validation loop with `--phase live`.
 
 ### Phase Responsibilities
 
 | Phase | Tool | Mode | Main purpose | Expected session artifact |
 | --- | --- | --- | --- | --- |
 | Plan | Claude Code CLI | Interactive | Explore the target repo with the user and write an implementation plan | `todo.md` |
-| Implement | Codex CLI | Non-interactive exec | Apply the agreed plan | `implement_output.md` |
-| Test | Codex CLI | Non-interactive exec | Run and/or add tests, then summarize results | `test_output.md`, `test_results.md` |
+| Build | Codex CLI | Non-interactive exec | Apply the agreed plan and run tests in one session | `build_output.md`, `test_results.md` |
 | Review | Claude Code CLI | Non-interactive JSON output | Review the diff and produce a verdict | `review_output.json`, `review.md` |
-| Fix | Codex CLI | Non-interactive exec | Address failed tests or review feedback | `fix_output.md` |
+| Live | Gemini CLI | Non-interactive prompt | Run the app, inspect logs, smoke-test, and optionally attempt targeted runtime fixes | `live_output_<n>.md`, `live_results.md`, `live_feedback.md` |
+| Fix | Codex CLI | Non-interactive exec | Address review feedback and retest | `fix_output.md`, `test_results.md` |
+| Post-Live Verify | Codex CLI | Non-interactive exec | Re-run formal tests after Gemini-authored live fixes | `retest_after_live_output.md`, `test_results.md` |
 | Document | Codex CLI | Non-interactive exec | Update documentation or comments | `document_output.md` |
 | Commit | Codex CLI | Non-interactive exec | Stage relevant files and create a local commit | `commit_output.md` |
 
 ### Retry and Gating Behavior
 
-- `test` is wrapped by `phase_test_with_retries`, which retries up to `TEST_RETRY_LIMIT`.
-- If a test attempt fails and retries remain, OpusDex runs `fix` before retrying.
 - `review` is wrapped by `phase_review_with_gate`.
-- If review returns `REQUEST_CHANGES` or `BLOCK` and retries remain, OpusDex runs `fix`, then reruns testing, then reviews again.
+- If review returns `REQUEST_CHANGES` or `BLOCK` and retries remain, OpusDex runs `fix`, then re-reviews.
+- The live pass is optional unless `--auto-live` or `--phase live` is used.
+- Inside the live pass, Gemini gets up to `LIVE_RETRY_LIMIT` attempts to diagnose, fix, restart, and revalidate runtime issues.
+- If Gemini still fails, OpusDex feeds the live failure context into Claude review, runs Codex fixes if needed, then re-enters live validation. That outer review/live loop is capped by `LIVE_REVIEW_LIMIT`.
+- If Gemini gets the app healthy by changing tracked files, OpusDex runs a formal Codex verification pass, re-reviews the diff, and then requires one more clean live validation pass before continuing.
 - `commit` is gated by a confirmation prompt unless `--auto-commit` is used.
 
 ## Requirements
@@ -67,6 +70,7 @@ OpusDex assumes a Unix-like environment with standard shell utilities. Based on 
 - `jq`
 - Claude Code CLI
 - OpenAI Codex CLI
+- Gemini CLI, only when the live pass is enabled
 - Standard utilities such as `cat`, `date`, `grep`, `head`, `mktemp`, `sed`, `seq`, `tail`, `tee`, and `tr`
 
 The target project must already be a Git repository.
@@ -77,7 +81,7 @@ There is no installer script in this repository. Setup is manual:
 
 1. Clone this repository.
 2. Review and edit [`config.env`](/root/github/opusdex/config.env).
-3. Make sure the configured Claude and Codex CLI binaries exist and are authenticated.
+3. Make sure the configured Claude and Codex CLI binaries exist and are authenticated. If you plan to use the live pass, Gemini CLI should also be installed and authenticated.
 4. Run [`orchestrate.sh`](/root/github/opusdex/orchestrate.sh) against a target project.
 
 The current default configuration is:
@@ -88,15 +92,24 @@ The current default configuration is:
 | `CLAUDE_EFFORT` | `high` |
 | `CODEX_MODEL` | `gpt-5.4` |
 | `CODEX_EFFORT` | `xhigh` |
+| `GEMINI_MODEL` | `gemini-3.1-pro-preview` |
+| `AUTO_PLAN` | `false` |
+| `AUTO_LIVE` | `false` |
 | `AUTO_COMMIT` | `false` |
 | `TEST_RETRY_LIMIT` | `3` |
 | `REVIEW_RETRY_LIMIT` | `1` |
+| `LIVE_RETRY_LIMIT` | `3` |
+| `LIVE_REVIEW_LIMIT` | `2` |
 | `CODEX_YOLO_FLAG` | `--yolo` |
+| `GEMINI_YOLO_FLAG` | `--yolo` |
 
 Default binary paths are also defined in [`config.env`](/root/github/opusdex/config.env):
 
 - `CLAUDE_BIN="/root/.local/bin/claude"`
 - `CODEX_BIN="/root/.nvm/versions/node/v25.8.1/bin/codex"`
+- `GEMINI_BIN="/root/.nvm/versions/node/v25.8.1/bin/gemini"`
+
+`config.env` respects pre-set environment variables, so tests or wrapper scripts can override these defaults without editing the file.
 
 ## Usage
 
@@ -109,12 +122,15 @@ Default binary paths are also defined in [`config.env`](/root/github/opusdex/con
 | Option | Meaning |
 | --- | --- |
 | `--project PATH` | Target project directory. Required. |
+| `--auto-plan` | Skip the plan approval prompt. |
+| `--auto-live` | Skip the live-pass confirmation prompt. |
 | `--auto-commit` | Skip the interactive commit confirmation prompt. |
 | `--phase PHASE` | Resume from a specific phase. Earlier phases are skipped. |
 | `--claude-model MODEL` | Override the Claude model for this run. |
 | `--claude-effort LEVEL` | Override Claude reasoning effort. |
 | `--codex-model MODEL` | Override the Codex model for this run. |
 | `--codex-effort LEVEL` | Override Codex reasoning effort. |
+| `--gemini-model MODEL` | Override the Gemini model for the live pass. |
 | `-h`, `--help` | Show usage text. |
 
 ### Example Commands
@@ -125,10 +141,10 @@ Run a full session:
 ./orchestrate.sh "Add CSV import support" --project /root/src/myapp
 ```
 
-Resume from testing after an interrupted run:
+Resume the live workflow after an interrupted run:
 
 ```bash
-./orchestrate.sh "Add CSV import support" --project /root/src/myapp --phase test
+./orchestrate.sh "Add CSV import support" --project /root/src/myapp --phase live
 ```
 
 Skip the commit confirmation prompt:
@@ -173,7 +189,7 @@ For most phases, OpusDex:
 1. Loads a template from `prompts/<phase>.md`.
 2. Replaces placeholder variables.
 3. Writes the final prompt to a temporary file in `/tmp`.
-4. Passes the prompt text to Claude or Codex.
+4. Passes the prompt text to Claude, Codex, or Gemini.
 
 Plan is special: it uses separate system and task prompts from [`prompts/plan_system.md`](/root/github/opusdex/prompts/plan_system.md) and [`prompts/plan_task.md`](/root/github/opusdex/prompts/plan_task.md).
 
@@ -185,10 +201,13 @@ The current placeholder sources are:
 | `{{TASK}}` | Task description passed on the command line |
 | `{{PROJECT_PATH}}` | Absolute target project path |
 | `{{SESSION_TASK_DIR}}` | Session artifact directory |
-| `{{CONTEXT}}` | `todo.md` for `implement`; `test_results.md` for `review` and `fix` |
+| `{{CONTEXT}}` | `todo.md` for `build`; `test_results.md` for `review`, `fix_and_retest`, `retest_after_live`, and `live` |
 | `{{CHANGES}}` | `git diff --name-only` from baseline to `HEAD`, with working-tree fallback |
-| `{{DIFF}}` | Full `git diff` from baseline to `HEAD`, with working-tree fallback |
+| `{{DIFF}}` | Diff summary (`--name-only` + `--stat`) from baseline to `HEAD`, with working-tree fallback |
 | `{{REVIEW}}` | Contents of `review.md`, if present |
+| `{{LIVE_FEEDBACK}}` | Contents of `live_feedback.md`, if present |
+| `{{REVIEW_ROUND}}` | Current review round number |
+| `{{LIVE_ATTEMPT}}` | Current live-attempt number |
 
 ### Memory Model
 
@@ -196,7 +215,11 @@ Memory management lives in [`lib/memory.sh`](/root/github/opusdex/lib/memory.sh)
 
 Each target project gets a shared memory file — `memory/shared_context.md` — injected into every prompt via `{{MEMORY}}`.
 
-At session finalization, OpusDex looks for `lessons.md` in the session directory. Any sections beginning with `### Rule:` are appended to `shared_context.md` if they are not already present.
+At session finalization, OpusDex looks for `lessons.md` in the session directory. Any sections beginning with `### Rule:` are merged into `shared_context.md`.
+
+If a project still has legacy `memory/claude_lessons.md` or `memory/codex_lessons.md` files, OpusDex migrates their rule blocks into `shared_context.md` during setup instead of silently ignoring them.
+
+Memory curation is AI-assisted, but replacements are validated before they overwrite the shared context. If the curated output is structurally incomplete, OpusDex falls back to deterministic rule merging.
 
 ### Review Verdict Parsing
 
@@ -225,12 +248,15 @@ The orchestrator keeps project-specific state under:
     └── <session_id>/
         ├── task.txt
         ├── todo.md
-        ├── implement_output.md
-        ├── test_output.md
+        ├── build_output.md
         ├── test_results.md
         ├── review_output.json
         ├── review.md
+        ├── live_output_<n>.md
+        ├── live_results.md
+        ├── live_feedback.md
         ├── fix_output.md
+        ├── retest_after_live_output.md
         ├── document_output.md
         ├── commit_output.md
         └── lessons.md
@@ -251,9 +277,9 @@ Each entry includes:
 - timestamp
 - session ID
 - original task text
+- AI-generated session summary
 - final status
 - latest commit hash and subject line
-- files changed between the baseline commit and `HEAD`
 - session duration
 
 ## AI Tool Integration
@@ -264,6 +290,7 @@ Claude is used for:
 
 - interactive planning
 - review
+- build-log memory/session summarization and memory curation
 
 Current execution behavior:
 
@@ -275,9 +302,9 @@ Current execution behavior:
 
 Codex is used for:
 
-- implement
-- test
+- build
 - fix
+- post-live verification
 - document
 - commit
 
@@ -287,6 +314,20 @@ Current execution behavior:
 - every Codex phase runs with `-C "$PROJECT_PATH"`
 - every Codex phase passes the configured reasoning effort
 - every Codex phase uses the configured YOLO flag, which defaults to `--yolo`
+
+### Gemini Usage
+
+Gemini is used for:
+
+- optional live validation
+- runtime diagnosis and targeted live-fix attempts
+
+Current execution behavior:
+
+- Gemini is only required when the live phase is actually entered
+- the live phase runs from the target project directory
+- Gemini may retry runtime fixes up to `LIVE_RETRY_LIMIT`
+- if Gemini changes tracked files and reaches a passing live verdict, OpusDex runs a Codex verification pass and a Claude review before requiring one more clean live pass
 
 ## Project-Defined Agents and Skills
 
@@ -327,15 +368,19 @@ Current repository layout:
 │   ├── phases.sh
 │   ├── prompts.sh
 │   └── utils.sh
+├── tests/
+│   └── run.sh
 └── prompts/
+    ├── build.md
     ├── commit.md
     ├── document.md
-    ├── fix.md
-    ├── implement.md
+    ├── fix_and_retest.md
+    ├── live.md
     ├── plan_system.md
     ├── plan_task.md
+    ├── retest_after_live.md
     ├── review.md
-    └── test.md
+    └── ...
 ```
 
 ### File Roles
@@ -347,6 +392,7 @@ Current repository layout:
 - [`lib/memory.sh`](/root/github/opusdex/lib/memory.sh): `.opusdex/` initialization and lesson merging
 - [`lib/prompts.sh`](/root/github/opusdex/lib/prompts.sh): template loading and placeholder substitution
 - [`lib/phases.sh`](/root/github/opusdex/lib/phases.sh): implementations of each orchestrator phase
+- [`tests/run.sh`](/root/github/opusdex/tests/run.sh): regression checks for retry, resume, memory, and live-phase workflows
 - [`prompts/*.md`](/root/github/opusdex/prompts): phase-specific instructions given to Claude or Codex
 - [`CLAUDE.md`](/root/github/opusdex/CLAUDE.md): repository-level instructions for Claude when working on OpusDex itself
 
@@ -358,6 +404,12 @@ The current shell scripts parse successfully with:
 
 ```bash
 bash -n orchestrate.sh lib/*.sh
+```
+
+The regression suite runs with:
+
+```bash
+./tests/run.sh
 ```
 
 ### Git Ignore Behavior

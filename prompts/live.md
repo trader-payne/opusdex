@@ -30,7 +30,7 @@ Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
 ## Test Results
 {{CONTEXT}}
 
-## Review
+## Prior Review History
 {{REVIEW}}
 
 ## Project
@@ -40,6 +40,8 @@ Session directory: `{{SESSION_TASK_DIR}}`
 ## Instructions
 
 This is attempt {{LIVE_ATTEMPT}} of 3.
+
+You may make targeted code or configuration changes when runtime issues block the app from working, but keep them minimal and directly tied to the live failure you are fixing.
 
 ### Phase 1: Orient — understand how the project runs
 
@@ -63,10 +65,11 @@ This is attempt {{LIVE_ATTEMPT}} of 3.
 12. **Plan the fix** — think through the approach before changing code.
 13. **Implement the fix** — make targeted changes. Don't refactor or improve unrelated code.
 14. **Restart and verify** — re-run the affected service and confirm the fix works.
+15. **If the issue is still not solved**, update `live_results.md` with the latest status and try again on the next attempt.
 
 ### Finalize
 
-15. Write results to `{{SESSION_TASK_DIR}}/live_results.md`:
+16. Write results to `{{SESSION_TASK_DIR}}/live_results.md` on every attempt:
 
 ```markdown
 # Live Environment Results

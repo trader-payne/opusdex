@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 # OpusDex memory management
 
+shared_context_header() {
+    cat <<'EOF'
+# Shared Context
+> Project knowledge shared between Claude Code and Codex.
+EOF
+}
+
+has_rule_blocks() {
+    local content="${1:-}"
+    [[ -n "$content" ]] && grep -q "^### Rule:" <<<"$content"
+}
+
 init_project_data_dir() {
     ensure_dir "$PROJECT_DATA_DIR"
     ensure_dir "$PROJECT_DATA_DIR/memory"
@@ -30,11 +42,10 @@ init_memory_files() {
     ensure_dir "$memory_dir"
 
     if [[ ! -f "$memory_dir/shared_context.md" ]]; then
-        cat > "$memory_dir/shared_context.md" <<'EOF'
-# Shared Context
-> Project knowledge shared between Claude Code and Codex.
-EOF
+        shared_context_header > "$memory_dir/shared_context.md"
     fi
+
+    migrate_legacy_memory_files
 }
 
 read_memory() {
@@ -48,9 +59,63 @@ read_memory() {
     printf '%s' "$output"
 }
 
+merge_rule_blocks_from_file() {
+    local source_file="$1"
+    local target_file="$2"
+
+    local added=0
+    local current_rule=""
+    local current_block=""
+    local in_rule=false
+
+    [[ -f "$source_file" ]] || {
+        printf '0'
+        return 0
+    }
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^###\ Rule: ]]; then
+            if [[ "$in_rule" == true && -n "$current_block" ]]; then
+                if ! grep -qF "$current_rule" "$target_file" 2>/dev/null; then
+                    printf '\n%s' "$current_block" >> "$target_file"
+                    added=$((added + 1))
+                fi
+            fi
+            current_rule="$line"
+            current_block="$line"
+            in_rule=true
+        elif [[ "$in_rule" == true ]]; then
+            current_block+=$'\n'"$line"
+        fi
+    done < "$source_file"
+
+    if [[ "$in_rule" == true && -n "$current_block" ]]; then
+        if ! grep -qF "$current_rule" "$target_file" 2>/dev/null; then
+            printf '\n%s' "$current_block" >> "$target_file"
+            added=$((added + 1))
+        fi
+    fi
+
+    printf '%s' "$added"
+}
+
+migrate_legacy_memory_files() {
+    local memory_dir="${PROJECT_DATA_DIR}/memory"
+    local shared_file="$memory_dir/shared_context.md"
+    local legacy_file added
+
+    for legacy_file in "$memory_dir/claude_lessons.md" "$memory_dir/codex_lessons.md"; do
+        if [[ -f "$legacy_file" ]]; then
+            added="$(merge_rule_blocks_from_file "$legacy_file" "$shared_file")"
+            if [[ "$added" -gt 0 ]]; then
+                log_info "Migrated $added rule(s) from $(basename "$legacy_file") into shared context"
+            fi
+        fi
+    done
+}
+
 # AI-curated memory merge: sends existing memory + new lessons to Claude,
-# which returns a consolidated, pruned version. Falls back to blind append
-# if the Claude call fails.
+# which returns a consolidated, pruned version.
 curate_memory() {
     local existing_memory="$1"
     local new_lessons="$2"
@@ -78,45 +143,33 @@ PROMPT_EOF
     local result
     result="$("$CLAUDE_BIN" --print -p "$prompt" --model haiku --output-format text 2>/dev/null)" || true
 
-    # Validate the result looks like a proper shared context file
-    if [[ -n "$result" ]] && echo "$result" | grep -q "^# Shared Context"; then
-        printf '%s' "$result"
+    printf '%s' "$result"
+}
+
+validate_curated_memory() {
+    local candidate="$1"
+    local existing_memory="$2"
+    local new_lessons="$3"
+
+    [[ -n "$candidate" ]] || return 1
+    grep -q "^# Shared Context$" <<<"$candidate" || return 1
+    grep -q "^> Project knowledge shared between Claude Code and Codex\\.$" <<<"$candidate" || return 1
+
+    if { has_rule_blocks "$existing_memory" || has_rule_blocks "$new_lessons"; } \
+        && ! has_rule_blocks "$candidate"; then
+        return 1
     fi
+
+    return 0
 }
 
 # Fallback: blind append with header-level dedup (used when AI curation fails)
 merge_lessons_fallback() {
     local lessons_file="$1"
     local shared_file="$2"
+    local added
 
-    local added=0
-    local current_rule=""
-    local current_block=""
-    local in_rule=false
-
-    while IFS= read -r line; do
-        if [[ "$line" =~ ^###\ Rule: ]]; then
-            if [[ "$in_rule" == true && -n "$current_block" ]]; then
-                if ! grep -qF "$current_rule" "$shared_file" 2>/dev/null; then
-                    printf '\n%s' "$current_block" >> "$shared_file"
-                    added=$((added + 1))
-                fi
-            fi
-            current_rule="$line"
-            current_block="$line"
-            in_rule=true
-        elif [[ "$in_rule" == true ]]; then
-            current_block+=$'\n'"$line"
-        fi
-    done < "$lessons_file"
-
-    if [[ "$in_rule" == true && -n "$current_block" ]]; then
-        if ! grep -qF "$current_rule" "$shared_file" 2>/dev/null; then
-            printf '\n%s' "$current_block" >> "$shared_file"
-            added=$((added + 1))
-        fi
-    fi
-
+    added="$(merge_rule_blocks_from_file "$lessons_file" "$shared_file")"
     log_info "Fallback merge: appended $added new lesson(s)"
 }
 
@@ -150,8 +203,11 @@ merge_session_lessons() {
     local curated
     curated="$(curate_memory "$existing_memory" "$new_lessons")"
 
-    if [[ -n "$curated" ]]; then
-        printf '%s\n' "$curated" > "$shared_file"
+    if validate_curated_memory "$curated" "$existing_memory" "$new_lessons"; then
+        local tmp_file
+        tmp_file="$(mktemp "$shared_file.XXXXXX.tmp")"
+        printf '%s\n' "$curated" > "$tmp_file"
+        mv "$tmp_file" "$shared_file"
         log_success "Shared context curated and updated"
     else
         log_warn "AI curation failed — falling back to blind merge"

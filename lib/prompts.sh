@@ -26,7 +26,7 @@ build_prompt() {
     # Inject session task dir
     prompt="${prompt//\{\{SESSION_TASK_DIR\}\}/$SESSION_TASK_DIR}"
 
-    # Inject context (todo.md for build, test_results.md for review/fix_and_retest)
+    # Inject context (todo.md for build, test_results.md for review/fix/retest/live)
     local context=""
     case "$phase" in
         build)
@@ -36,6 +36,9 @@ build_prompt() {
             [[ -f "$SESSION_TASK_DIR/test_results.md" ]] && context="$(cat "$SESSION_TASK_DIR/test_results.md")"
             ;;
         fix_and_retest)
+            [[ -f "$SESSION_TASK_DIR/test_results.md" ]] && context="$(cat "$SESSION_TASK_DIR/test_results.md")"
+            ;;
+        retest_after_live)
             [[ -f "$SESSION_TASK_DIR/test_results.md" ]] && context="$(cat "$SESSION_TASK_DIR/test_results.md")"
             ;;
         live)
@@ -81,6 +84,11 @@ build_prompt() {
     local review=""
     [[ -f "$SESSION_TASK_DIR/review.md" ]] && review="$(cat "$SESSION_TASK_DIR/review.md")"
     prompt="${prompt//\{\{REVIEW\}\}/$review}"
+
+    # Inject live feedback for fallback review loops
+    local live_feedback=""
+    [[ -f "$SESSION_TASK_DIR/live_feedback.md" ]] && live_feedback="$(cat "$SESSION_TASK_DIR/live_feedback.md")"
+    prompt="${prompt//\{\{LIVE_FEEDBACK\}\}/$live_feedback}"
 
     # Write to temp file and return path
     write_prompt_to_tmpfile "$prompt"

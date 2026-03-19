@@ -36,6 +36,12 @@ Use `git diff {{BASELINE_COMMIT}} HEAD -- <file>` to inspect the full diff for s
 ## Test Results
 {{CONTEXT}}
 
+## Prior Review History
+{{REVIEW}}
+
+## Live Failure Context
+{{LIVE_FEEDBACK}}
+
 ## Project
 Working directory: `{{PROJECT_PATH}}`
 Session directory: `{{SESSION_TASK_DIR}}`
@@ -50,7 +56,9 @@ Session directory: `{{SESSION_TASK_DIR}}`
    - Style: Does the code follow project conventions?
    - Completeness: Are there missing edge cases or error handling?
 3. **Read test results** — are the tests adequate?
-4. **Synthesize findings** from all agents and **provide a verdict**: `APPROVE`, `REQUEST_CHANGES`, or `BLOCK`.
+4. **Use prior review history as context only** — do not repeat old findings unless they are still unresolved.
+5. **Treat live failure context as new evidence** when it is present. If runtime behavior contradicts earlier assumptions, prioritize the runtime evidence.
+6. **Synthesize findings** from all agents and **provide a verdict**: `APPROVE`, `REQUEST_CHANGES`, or `BLOCK`.
 
 ## Output
 
@@ -77,6 +85,8 @@ Write your review to `{{SESSION_TASK_DIR}}/review.md`:
 
 [If REQUEST_CHANGES or BLOCK, list specific items that must be addressed]
 ```
+
+Write only the latest review round. The orchestrator preserves prior rounds automatically.
 
 Use `BLOCK` only for security issues or fundamental design flaws. Use `REQUEST_CHANGES` for bugs or significant quality issues. Use `APPROVE` when the code is ready to ship.
 

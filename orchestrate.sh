@@ -118,7 +118,6 @@ PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"  # Resolve to absolute path
 
 require_command "$CLAUDE_BIN"
 require_command "$CODEX_BIN"
-require_command "$GEMINI_BIN"
 require_command "jq"
 require_command "git"
 
@@ -227,13 +226,13 @@ run_phase() {
             phase_build || abort "Build phase failed"
             ;;
         review)
-            phase_review_and_live || abort "Review/live cycle failed"
+            phase_review_and_live "normal" || abort "Review/live cycle failed"
             LIVE_DONE=true  # live was handled inside review+live cycle
             ;;
         live)
-            # Only run standalone when explicitly resumed via --phase live
             if [[ "${LIVE_DONE:-}" != "true" ]]; then
-                phase_live_inner || abort "Live pass failed"
+                phase_review_and_live "live_resume" || abort "Live phase failed"
+                LIVE_DONE=true
             fi
             ;;
         document)

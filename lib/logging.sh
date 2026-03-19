@@ -32,7 +32,20 @@ log_separator() {
 
 log_phase() {
     local name="$1"
-    local color="${PHASE_COLORS[${name,,}]:-$CLR_BOLD}"
+    local phase_key="${name,,}"
+    local color="$CLR_BOLD"
+
+    case "$phase_key" in
+        plan) color="$CLR_BLUE" ;;
+        implement) color="$CLR_GREEN" ;;
+        test) color="$CLR_YELLOW" ;;
+        review) color="$CLR_CYAN" ;;
+        fix) color="$CLR_MAGENTA" ;;
+        live) color="$CLR_BOLD_CYAN" ;;
+        document) color="$CLR_WHITE" ;;
+        commit) color="$CLR_BOLD_GREEN" ;;
+    esac
+
     echo ""
     log_separator
     printf "${color}${CLR_BOLD}  ▶ PHASE: %s${CLR_RESET}\n" "${name^^}"
