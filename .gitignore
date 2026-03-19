@@ -2,3 +2,6 @@ tasks/
 logs/
 *.tmp
 .codanna/
+.fastembed_cache
+.fastembed_cache/
+workspace/
