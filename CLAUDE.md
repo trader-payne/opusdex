@@ -1,6 +1,6 @@
 # OpusDex — AI Development Orchestrator
 
-OpusDex is a bash-based orchestrator that coordinates Claude Code CLI and OpenAI Codex CLI through a structured 7-phase development workflow.
+OpusDex is a bash-based orchestrator that coordinates Claude Code CLI, OpenAI Codex CLI, and optionally Gemini CLI through a structured development workflow.
 
 ## Architecture
 
@@ -11,7 +11,7 @@ lib/utils.sh            → Shell utilities (dirs, timestamps, prompts, confirma
 lib/logging.sh          → Color-coded phase logging
 lib/memory.sh           → Persistent lesson memory (read/write/merge), per-project data init
 lib/prompts.sh          → Prompt template assembly with placeholder substitution
-lib/phases.sh           → 5 phase functions (plan/build/review/document/commit)
+lib/phases.sh           → Phase functions (plan/build/review/live/document/commit)
 prompts/*.md            → Phase prompt templates with {{PLACEHOLDER}} variables
 ```
 
@@ -36,29 +36,34 @@ Memory, sessions, and build logs are per-project. Code and prompt templates rema
 
 1. **Plan** (Claude, interactive) — Discuss and refine approach with user, produce `todo.md`
 2. **Build** (Codex, single session) — Implement the plan + run/write tests + fix failures, all in one `codex exec` call so Codex retains full implementation context during testing
-3. **Review** (Claude, continues plan session) — Code review with verdict (APPROVE/REQUEST_CHANGES/BLOCK). Uses `--resume` to continue the plan conversation, so Claude retains all codebase understanding from planning.
+3. **Review & Live Validation** (Claude + Gemini) — Code review with verdict (APPROVE/REQUEST_CHANGES/BLOCK). Uses `--resume` to continue the plan conversation.
    - If REQUEST_CHANGES/BLOCK → **Fix & Retest** (Codex, single session) — fix + retest in one call → re-review
+   - **Live Pass** (Gemini, optional) — Validates the app in a live environment. If it fails, Gemini can retry fixes. If Gemini exhausts retries, it outputs `live_feedback.md`, and Claude re-reviews to design a fix. If Gemini successfully fixes issues, Codex runs a **Post-Live Verify** test pass before the loop continues.
 4. **Document** (Codex, write) — Update documentation
 5. **Commit** (Codex, write) — Stage and commit (gated on approval)
 
 ### Session Continuity
 
 ```
-Claude session:  plan ──────────────────────► review ──────► re-review
+Claude session:  plan ──────────────────────► review ──────► re-review (with live_feedback.md)
                    │                            ▲  │            ▲
                    │  (file handoff)            │  │            │
                    ▼                            │  ▼            │
 Codex session:   build (impl+test) ─────────────┘  fix+retest──┘
+                                                                ▲
+Gemini session:                                                 │
+(Live env pass)─────────────────────────────────────────► live+fix (returns code 0, 1, or 2)
 ```
 
-- **Claude**: plan and review share a conversation via `--session-id` / `--resume`. The review phase has full context from planning (codebase exploration, architecture understanding).
-- **Codex**: build = implement + test + inline fix in one `codex exec` call. Fix & retest = fix + test in one call. Each retains full context within its session.
-- **Handoff**: file-based (`todo.md`, `test_results.md`, `review.md`) only at the Claude↔Codex boundary.
+- **Claude**: plan and review share a conversation via `--session-id` / `--resume`. The review phase has full context from planning (codebase exploration, architecture understanding). Review history and live feedback accumulate in `review.md` and `live_feedback.md`.
+- **Codex**: build = implement + test + inline fix in one `codex exec` call. Fix & retest = fix + test in one call. Post-live verify = test in one call. Each retains full context within its session.
+- **Gemini**: live = test + fix in an interactive prompt via `gemini -m ...`.
+- **Handoff**: file-based (`todo.md`, `test_results.md`, `review.md`, `live_feedback.md`, `live_results.md`) at tool boundaries.
 
 ## Running
 
 ```bash
-./orchestrate.sh "task description" --project /path/to/project [--auto-commit] [--phase PHASE]
+./orchestrate.sh "task description" --project /path/to/project [--auto-plan] [--auto-live] [--auto-commit] [--phase PHASE]
 ```
 
 ## Project Agent & Skill Discovery
@@ -69,7 +74,7 @@ Spawned processes auto-discover agents and skills defined in the target project:
   - `.claude/agents/<name>/AGENT.md` — project-defined agents
   - `.claude/skills/<name>/SKILL.md` — project-defined skills/slash commands
   - `CLAUDE.md` — project instructions
-- **Codex phases** (implement, test, fix, document, commit) run with `-C $PROJECT_PATH`, so Codex auto-discovers:
+- **Codex phases** (build, fix, document, commit) run with `-C $PROJECT_PATH`, so Codex auto-discovers:
   - `.codex/agents/*.toml` — project-defined agents
   - `.agents/skills/<name>/SKILL.md` — project-defined skills
   - `AGENTS.md` — project instructions
@@ -93,4 +98,4 @@ Each phase prompt lists which specific tools to use and when (e.g., `analyze_imp
 - Prompts use `{{PLACEHOLDER}}` syntax, substituted by `build_prompt` in `lib/prompts.sh`.
 - Memory files use markdown with `### Rule:` headers for machine-parseable lesson extraction.
 - Session artifacts go in `$PROJECT_PATH/.opusdex/tasks/<session_id>/` (gitignored).
-- YOLO mode is always on: Claude uses `--dangerously-skip-permissions`, Codex uses `--yolo`.
+- YOLO mode is always on: Claude uses `--dangerously-skip-permissions`, Codex and Gemini use `--yolo`.

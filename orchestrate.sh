@@ -32,7 +32,7 @@ Options:
   --auto-live            Skip live pass confirmation prompt
   --claude-model MODEL   Override Claude model (default: opus)
   --claude-effort LEVEL  Override Claude effort (default: high)
-  --codex-model MODEL    Override Codex model (default: chatgpt-5.4)
+  --codex-model MODEL    Override Codex model (default: gpt-5.4)
   --codex-effort LEVEL   Override Codex effort (default: xhigh)
   --gemini-model MODEL   Override Gemini model (default: gemini-3.1-pro-preview)
   -h, --help             Show this help message

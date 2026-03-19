@@ -431,9 +431,6 @@ Per-project `.opusdex/.gitignore` files are seeded automatically and currently i
 
 These are worth knowing if you plan to extend the orchestrator:
 
-- The CLI help text lists `fix` as a valid `--phase` resume target, but the top-level `PHASES` array in [`orchestrate.sh`](/root/github/opusdex/orchestrate.sh) does not include it. In current code, `fix` runs only inside retry flows.
-- The CLI help text says the default Codex model is `chatgpt-5.4`, while [`config.env`](/root/github/opusdex/config.env) currently sets `CODEX_MODEL="gpt-5.4"`.
-- [`config.env`](/root/github/opusdex/config.env) says values are overridable by environment variables, but current assignments are unconditional. In practice, CLI flags and direct edits to `config.env` are the reliable override mechanisms.
 - The plan prompt mentions Context7 tool names `resolve-library-id` and `get-library-docs`, but the exact available MCP naming depends on the AI runtime environment rather than this repository.
 
 ## Summary
