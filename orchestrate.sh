@@ -28,11 +28,13 @@ Options:
   --auto-plan            Skip plan confirmation prompt
   --auto-commit          Skip commit confirmation prompt
   --phase PHASE          Resume from a specific phase
-                         (plan|build|review|document|commit)
+                         (plan|build|review|live|document|commit)
+  --auto-live            Skip live pass confirmation prompt
   --claude-model MODEL   Override Claude model (default: opus)
   --claude-effort LEVEL  Override Claude effort (default: high)
   --codex-model MODEL    Override Codex model (default: chatgpt-5.4)
   --codex-effort LEVEL   Override Codex effort (default: xhigh)
+  --gemini-model MODEL   Override Gemini model (default: gemini-3.1-pro-preview)
   -h, --help             Show this help message
 EOF
     exit 0
@@ -60,6 +62,9 @@ while [[ $# -gt 0 ]]; do
         --auto-commit)
             AUTO_COMMIT=true; shift
             ;;
+        --auto-live)
+            AUTO_LIVE=true; shift
+            ;;
         --phase)
             START_PHASE="$2"; shift 2
             ;;
@@ -74,6 +79,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --codex-effort)
             CODEX_EFFORT="$2"; shift 2
+            ;;
+        --gemini-model)
+            GEMINI_MODEL="$2"; shift 2
             ;;
         -*)
             abort "Unknown option: $1"
@@ -110,6 +118,7 @@ PROJECT_PATH="$(cd "$PROJECT_PATH" && pwd)"  # Resolve to absolute path
 
 require_command "$CLAUDE_BIN"
 require_command "$CODEX_BIN"
+require_command "$GEMINI_BIN"
 require_command "jq"
 require_command "git"
 
@@ -165,7 +174,9 @@ log_info "Project:  $PROJECT_PATH"
 log_info "Baseline: $BASELINE_COMMIT"
 log_info "Claude:   $CLAUDE_MODEL (effort: $CLAUDE_EFFORT)"
 log_info "Codex:    $CODEX_MODEL (effort: $CODEX_EFFORT)"
+log_info "Gemini:   $GEMINI_MODEL"
 log_info "Auto-plan: $AUTO_PLAN"
+log_info "Auto-live: $AUTO_LIVE"
 log_info "Auto-commit: $AUTO_COMMIT"
 [[ "$SESSION_REUSED" == true ]] && log_info "Resuming session: $SESSION_ID"
 [[ -n "$START_PHASE" ]] && log_info "Resuming from: $START_PHASE"
@@ -176,12 +187,13 @@ printf '%s\n' "$TASK_DESCRIPTION" > "$SESSION_TASK_DIR/task.txt"
 
 # ─── Phase Execution ─────────────────────────────────────────────────────────
 
-PHASES=(plan build review document commit)
+PHASES=(plan build review live document commit)
 
 # Backward-compat: map old phase names
 case "${START_PHASE:-}" in
     implement|test) START_PHASE="build" ;;
     fix)            START_PHASE="review" ;;
+    live_pass)      START_PHASE="live" ;;
 esac
 
 SKIP=true
@@ -215,7 +227,14 @@ run_phase() {
             phase_build || abort "Build phase failed"
             ;;
         review)
-            phase_review_with_gate || abort "Review phase did not approve"
+            phase_review_and_live || abort "Review/live cycle failed"
+            LIVE_DONE=true  # live was handled inside review+live cycle
+            ;;
+        live)
+            # Only run standalone when explicitly resumed via --phase live
+            if [[ "${LIVE_DONE:-}" != "true" ]]; then
+                phase_live_inner || abort "Live pass failed"
+            fi
             ;;
         document)
             phase_document || abort "Document phase failed"

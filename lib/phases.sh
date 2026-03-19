@@ -9,6 +9,7 @@
 
 CLAUDE_SESSION_ID=""
 REVIEW_ROUND=0
+LIVE_ATTEMPT=0
 
 generate_uuid() {
     cat /proc/sys/kernel/random/uuid 2>/dev/null \
@@ -280,6 +281,145 @@ phase_fix_and_retest() {
 
     log_success "Fix + retest complete"
     return 0
+}
+
+# ─── Live Pass (Gemini, gated) ──────────────────────────────────────────────
+
+phase_live() {
+    log_phase "live"
+
+    local prompt_file
+    prompt_file="$(build_prompt "live")"
+
+    log_info "Invoking Gemini for live environment pass (attempt $LIVE_ATTEMPT)..."
+
+    local output_file="$SESSION_TASK_DIR/live_output_${LIVE_ATTEMPT}.md"
+
+    (cd "$PROJECT_PATH" && "$GEMINI_BIN" \
+        -m "$GEMINI_MODEL" \
+        $GEMINI_YOLO_FLAG \
+        -p "$(cat "$prompt_file")" \
+        -o text) \
+        > "$output_file" 2>&1
+
+    local exit_code=$?
+    rm -f "$prompt_file"
+
+    if [[ $exit_code -ne 0 ]]; then
+        log_error "Gemini live pass failed (exit $exit_code)"
+        [[ -f "$output_file" ]] && cat "$output_file" >&2
+        return 1
+    fi
+
+    # Write live_results.md from output if Gemini didn't create it directly
+    if [[ ! -f "$SESSION_TASK_DIR/live_results.md" ]]; then
+        cp "$output_file" "$SESSION_TASK_DIR/live_results.md"
+    fi
+
+    # Parse verdict from live_results.md
+    local verdict
+    verdict="$(grep -oiE 'Verdict:\s*(PASS|FAIL)' "$SESSION_TASK_DIR/live_results.md" 2>/dev/null | tail -1 | sed 's/.*:\s*//' | tr '[:lower:]' '[:upper:]')"
+
+    case "$verdict" in
+        PASS)
+            log_success "Live pass verdict: PASS"
+            return 0
+            ;;
+        FAIL)
+            log_warn "Live pass verdict: FAIL"
+            return 1
+            ;;
+        *)
+            log_warn "Could not parse live verdict — treating as FAIL"
+            return 1
+            ;;
+    esac
+}
+
+phase_live_inner() {
+    local attempt
+    for attempt in $(seq 1 "$LIVE_RETRY_LIMIT"); do
+        LIVE_ATTEMPT=$attempt
+
+        # Clear previous live_results.md so we parse fresh output
+        rm -f "$SESSION_TASK_DIR/live_results.md"
+
+        phase_live
+        local result=$?
+
+        if [[ $result -eq 0 ]]; then
+            return 0
+        fi
+
+        if [[ $attempt -lt $LIVE_RETRY_LIMIT ]]; then
+            log_info "Live issue found — Gemini will retry (attempt $((attempt + 1))/$LIVE_RETRY_LIMIT)..."
+        else
+            log_error "Live pass failed after $LIVE_RETRY_LIMIT Gemini attempts"
+            return 1
+        fi
+    done
+
+    return 1
+}
+
+# Append live failure findings to review.md so Claude sees them on re-review
+feed_live_failures_to_review() {
+    local review_file="$SESSION_TASK_DIR/review.md"
+    local live_file="$SESSION_TASK_DIR/live_results.md"
+
+    if [[ -f "$live_file" ]]; then
+        {
+            echo ""
+            echo "---"
+            echo ""
+            echo "## Live Environment Failures (fed back for re-review)"
+            echo ""
+            cat "$live_file"
+        } >> "$review_file"
+    fi
+}
+
+# ─── Review + Live outer loop ──────────────────────────────────────────────
+
+phase_review_and_live() {
+    local outer
+    for outer in $(seq 1 "$LIVE_REVIEW_LIMIT"); do
+        # Step 1: Review (with its internal fix retries)
+        phase_review_with_gate
+        local review_result=$?
+        if [[ $review_result -ne 0 ]]; then
+            return 1
+        fi
+
+        # Step 2: Live pass user gate (only ask on the first cycle)
+        if [[ $outer -eq 1 && "$AUTO_LIVE" != "true" ]]; then
+            echo ""
+            log_info "Live environment pass — runs the app and checks logs for runtime issues."
+            echo ""
+            if ! confirm "Run live environment pass?"; then
+                log_info "Skipping live pass — proceeding to documentation"
+                return 0
+            fi
+        fi
+
+        # Step 3: Live pass (with its internal retries)
+        phase_live_inner
+        local live_result=$?
+        if [[ $live_result -eq 0 ]]; then
+            return 0
+        fi
+
+        # Step 4: Live failed — feed findings back for re-review
+        if [[ $outer -lt $LIVE_REVIEW_LIMIT ]]; then
+            log_warn "Live pass failed — feeding runtime failures back to Claude for re-review"
+            feed_live_failures_to_review
+        else
+            log_error "Review↔live cycle failed after $LIVE_REVIEW_LIMIT attempts"
+            return 1
+        fi
+    done
+
+    return 1
 }
 
 # ─── Document (Codex, write) ─────────────────────────────────────────────────

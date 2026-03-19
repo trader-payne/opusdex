@@ -9,6 +9,7 @@ readonly CLR_YELLOW='\033[0;33m'     # test
 readonly CLR_CYAN='\033[0;36m'       # review
 readonly CLR_MAGENTA='\033[0;35m'    # fix
 readonly CLR_WHITE='\033[0;37m'      # document
+readonly CLR_BOLD_CYAN='\033[1;36m'  # live
 readonly CLR_BOLD_GREEN='\033[1;32m' # commit
 readonly CLR_RED='\033[0;31m'        # error
 readonly CLR_BOLD='\033[1m'
@@ -20,6 +21,7 @@ declare -A PHASE_COLORS=(
     [test]="$CLR_YELLOW"
     [review]="$CLR_CYAN"
     [fix]="$CLR_MAGENTA"
+    [live]="$CLR_BOLD_CYAN"
     [document]="$CLR_WHITE"
     [commit]="$CLR_BOLD_GREEN"
 )

@@ -38,6 +38,9 @@ build_prompt() {
         fix_and_retest)
             [[ -f "$SESSION_TASK_DIR/test_results.md" ]] && context="$(cat "$SESSION_TASK_DIR/test_results.md")"
             ;;
+        live)
+            [[ -f "$SESSION_TASK_DIR/test_results.md" ]] && context="$(cat "$SESSION_TASK_DIR/test_results.md")"
+            ;;
     esac
     prompt="${prompt//\{\{CONTEXT\}\}/$context}"
 
@@ -70,6 +73,9 @@ build_prompt() {
 
     # Inject review round number
     prompt="${prompt//\{\{REVIEW_ROUND\}\}/${REVIEW_ROUND:-1}}"
+
+    # Inject live attempt number
+    prompt="${prompt//\{\{LIVE_ATTEMPT\}\}/${LIVE_ATTEMPT:-1}}"
 
     # Inject review feedback
     local review=""
