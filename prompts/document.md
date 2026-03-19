@@ -35,7 +35,7 @@ Session directory: `{{SESSION_TASK_DIR}}`
 
 ## Instructions
 
-1. **Review what changed** — understand the scope of modifications.
+1. **Review what changed** — understand the scope of modifications. The changed file list is above; use grep or MCP search tools to locate the specific symbols and sections that changed rather than reading entire files.
 2. **Update docs with parallel agents** — launch separate agents for independent documentation tasks. For example:
    - README updates and API doc updates → parallel agents
    - Docstrings across unrelated modules → parallel agents

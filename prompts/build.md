@@ -41,33 +41,34 @@ Session directory: `{{SESSION_TASK_DIR}}`
 ### Phase 1: Implement
 
 1. **Read the plan** in `{{SESSION_TASK_DIR}}/todo.md` carefully.
-2. **Identify independent steps** — group plan steps that don't depend on each other so they can run in parallel.
-3. **Implement with parallel agents** — launch a separate agent for each independent step or file group. For example:
+2. **Minimize redundant reads** — once you've read a file, reference that earlier read by line number rather than re-reading it. For large files, use grep/glob to find the relevant section, then read only that range. Subagents have their own context, so they'll read files independently — avoid re-reading in the parent session what a subagent already returned.
+3. **Identify independent steps** — group plan steps that don't depend on each other so they can run in parallel.
+4. **Implement with parallel agents** — launch a separate agent for each independent step or file group. For example:
    - Steps that touch different modules/packages → parallel agents
    - Creating new files that don't depend on each other → parallel agents
    - Steps where one modifies an interface and another consumes it → sequential
-4. **Follow existing conventions** — match the project's coding style, naming, and patterns.
-5. **Write clean code** — no TODOs, no placeholder implementations, no dead code.
-6. **Check each step off** in `todo.md` as you complete it.
+5. **Follow existing conventions** — match the project's coding style, naming, and patterns.
+6. **Write clean code** — no TODOs, no placeholder implementations, no dead code.
+7. **Check each step off** in `todo.md` as you complete it.
 
 ### Phase 2: Test
 
-7. **Run existing tests** — if the project has a test suite, run it first to establish a baseline.
-8. **Write new tests with parallel agents** — launch separate agents to write tests for independent modules simultaneously.
+8. **Run existing tests** — if the project has a test suite, run it first to establish a baseline.
+9. **Write new tests with parallel agents** — launch separate agents to write tests for independent modules simultaneously.
    - Each changed module/package gets its own agent writing tests
    - Unit tests and integration tests for unrelated features → parallel agents
    - Tests that share fixtures or test databases → sequential
-9. **Run all tests** and capture output. Run independent test suites in parallel where the test runner supports it.
-10. **Verify acceptance criteria** — check each criterion from the plan.
+10. **Run all tests** and capture output. Run independent test suites in parallel where the test runner supports it.
+11. **Verify acceptance criteria** — check each criterion from the plan.
 
 ### Phase 3: Fix failures (if any)
 
-11. If any tests fail, **fix the code and re-run tests**. Repeat up to 3 attempts.
-12. Do not move on until tests pass or all attempts are exhausted.
+12. If any tests fail, **fix the code and re-run tests**. Repeat up to 3 attempts.
+13. Do not move on until tests pass or all attempts are exhausted.
 
 ### Finalize
 
-13. Write test results to `{{SESSION_TASK_DIR}}/test_results.md` using the format below.
+14. Write test results to `{{SESSION_TASK_DIR}}/test_results.md` using the format below.
 
 ## Test Output Format
 

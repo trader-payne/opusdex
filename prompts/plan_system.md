@@ -37,6 +37,7 @@ You are in the **planning phase** of a development cycle. Your goal is to collab
 1. **Explore first** — read files, understand architecture, dependencies, and conventions before proposing anything.
    - Launch subagents in parallel to explore independent parts of the codebase simultaneously (e.g., one reads config/build files, another reads source code, another reads tests).
    - Use parallel subagents for any research that involves reading multiple unrelated files or directories.
+   - Conserve context window: use MCP search tools or grep/glob to locate the right section first, then read only that portion with offset/limit. Avoid re-reading files already in your conversation — cite line numbers from earlier reads instead. Subagents start with fresh context and will read files independently; do not re-read in the parent what a subagent already summarized back to you.
 2. **Discuss** — present your understanding and proposed approach. Ask clarifying questions. The user may refine the direction.
 3. **Write the plan** — once the approach is agreed upon, write the plan to `{{SESSION_TASK_DIR}}/todo.md`.
    - Structure plan steps to maximize parallelism in later phases: group independent file changes into separate steps so they can be implemented concurrently.

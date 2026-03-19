@@ -68,6 +68,9 @@ build_prompt() {
     # Inject baseline commit ref
     prompt="${prompt//\{\{BASELINE_COMMIT\}\}/${BASELINE_COMMIT:-HEAD~1}}"
 
+    # Inject review round number
+    prompt="${prompt//\{\{REVIEW_ROUND\}\}/${REVIEW_ROUND:-1}}"
+
     # Inject review feedback
     local review=""
     [[ -f "$SESSION_TASK_DIR/review.md" ]] && review="$(cat "$SESSION_TASK_DIR/review.md")"

@@ -8,6 +8,7 @@
 # ─── Session State ──────────────────────────────────────────────────────────
 
 CLAUDE_SESSION_ID=""
+REVIEW_ROUND=0
 
 generate_uuid() {
     cat /proc/sys/kernel/random/uuid 2>/dev/null \
@@ -135,10 +136,20 @@ phase_build() {
 phase_review() {
     log_phase "review"
 
+    local review_file="$SESSION_TASK_DIR/review.md"
+    local prior_content=""
+
+    # Save prior review content so Claude can write a fresh file,
+    # then we reconstruct the accumulated history afterwards.
+    if [[ -f "$review_file" ]]; then
+        prior_content="$(cat "$review_file")"
+        rm -f "$review_file"
+    fi
+
     local prompt_file
     prompt_file="$(build_prompt "review")"
 
-    log_info "Invoking Claude Code for review..."
+    log_info "Invoking Claude Code for review (round $REVIEW_ROUND)..."
 
     local output_file="$SESSION_TASK_DIR/review_output.json"
 
@@ -175,13 +186,20 @@ phase_review() {
     result="$(jq -r '.result // .content // .' "$output_file" 2>/dev/null || cat "$output_file")"
 
     # Write review if Claude didn't create the file directly
-    if [[ ! -f "$SESSION_TASK_DIR/review.md" ]]; then
-        printf '%s\n' "$result" > "$SESSION_TASK_DIR/review.md"
+    if [[ ! -f "$review_file" ]]; then
+        printf '%s\n' "$result" > "$review_file"
     fi
 
-    # Parse verdict
+    # Prepend prior reviews to build the accumulated history
+    if [[ -n "$prior_content" ]]; then
+        local new_content
+        new_content="$(cat "$review_file")"
+        printf '%s\n\n---\n\n%s\n' "$prior_content" "$new_content" > "$review_file"
+    fi
+
+    # Parse the LAST verdict (latest round) from accumulated reviews
     local verdict
-    verdict="$(grep -oiE 'Verdict:\s*(APPROVE|REQUEST_CHANGES|BLOCK)' "$SESSION_TASK_DIR/review.md" | head -1 | sed 's/.*:\s*//' | tr '[:lower:]' '[:upper:]')"
+    verdict="$(grep -oiE 'Verdict:\s*(APPROVE|REQUEST_CHANGES|BLOCK)' "$review_file" | tail -1 | sed 's/.*:\s*//' | tr '[:lower:]' '[:upper:]')"
 
     case "$verdict" in
         APPROVE)
@@ -208,6 +226,7 @@ phase_review() {
 phase_review_with_gate() {
     local attempt
     for attempt in $(seq 0 "$REVIEW_RETRY_LIMIT"); do
+        REVIEW_ROUND=$((REVIEW_ROUND + 1))
         phase_review
         local verdict=$?
 

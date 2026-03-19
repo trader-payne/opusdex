@@ -41,18 +41,19 @@ Session directory: `{{SESSION_TASK_DIR}}`
 
 ### Phase 1: Fix
 
-1. **Read the review** in `{{SESSION_TASK_DIR}}/review.md` carefully.
-2. **Fix with parallel agents** — group independent issues and launch a separate agent for each group. For example:
+1. **Read the review** in `{{SESSION_TASK_DIR}}/review.md` carefully. Focus on the latest review round's findings — prior rounds are retained for context.
+2. **Read surgically** — the review cites specific files and locations. Read only the relevant sections of those files rather than entire files. Use grep to jump to the flagged code, then read that range. Avoid re-reading files you've already seen in this session.
+3. **Fix with parallel agents** — group independent issues and launch a separate agent for each group. For example:
    - Fixes in different files that don't affect each other → parallel agents
    - A bug fix and a style fix in unrelated modules → parallel agents
    - Fixes where one change affects another's behavior → sequential
-3. **Do not introduce new features** — only fix what was flagged.
+4. **Do not introduce new features** — only fix what was flagged.
 
 ### Phase 2: Retest
 
-4. **Run all tests** after fixing to verify nothing is broken.
-5. If tests fail, **fix and re-run**. Repeat up to 3 attempts.
-6. Write updated results to `{{SESSION_TASK_DIR}}/test_results.md` using the format below.
+5. **Run all tests** after fixing to verify nothing is broken.
+6. If tests fail, **fix and re-run**. Repeat up to 3 attempts.
+7. Write updated results to `{{SESSION_TASK_DIR}}/test_results.md` using the format below.
 
 ## Test Output Format
 

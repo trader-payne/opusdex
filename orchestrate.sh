@@ -232,6 +232,45 @@ done
 
 # ─── Finalize ────────────────────────────────────────────────────────────────
 
+generate_session_summary() {
+    local summary_context=""
+
+    # Gather available session artifacts
+    if [[ -f "$SESSION_TASK_DIR/todo.md" ]]; then
+        summary_context+="## Plan"$'\n'"$(cat "$SESSION_TASK_DIR/todo.md")"$'\n\n'
+    fi
+    if [[ -f "$SESSION_TASK_DIR/review.md" ]]; then
+        summary_context+="## Review"$'\n'"$(cat "$SESSION_TASK_DIR/review.md")"$'\n\n'
+    fi
+    if [[ -f "$SESSION_TASK_DIR/test_results.md" ]]; then
+        summary_context+="## Test Results"$'\n'"$(cat "$SESSION_TASK_DIR/test_results.md")"$'\n\n'
+    fi
+
+    local diff_stat
+    diff_stat="$(git -C "$PROJECT_PATH" diff --stat "$BASELINE_COMMIT" HEAD 2>/dev/null || true)"
+    if [[ -n "$diff_stat" ]]; then
+        summary_context+="## Diff Stat"$'\n'"$diff_stat"$'\n\n'
+    fi
+
+    # Fall back to raw task if no artifacts exist
+    if [[ -z "$summary_context" ]]; then
+        echo "$TASK_DESCRIPTION"
+        return
+    fi
+
+    local prompt="Summarize this development session in 2-4 sentences. Focus on what was implemented or changed, key decisions made, and the final outcome (tests passing, review approved, etc.). Be specific and concise — this is for a build log."
+    prompt+=$'\n\n'"## Original Task"$'\n'"$TASK_DESCRIPTION"$'\n\n'"$summary_context"
+
+    local result
+    result="$("$CLAUDE_BIN" --print -p "$prompt" --model haiku --output-format text 2>/dev/null)" || true
+
+    if [[ -n "$result" ]]; then
+        echo "$result"
+    else
+        echo "$TASK_DESCRIPTION"
+    fi
+}
+
 finalize_session() {
     local status="${1:-SUCCESS}"
 
@@ -242,22 +281,24 @@ finalize_session() {
     # Merge lessons into persistent memory
     merge_session_lessons "$SESSION_TASK_DIR"
 
-    # Gather commit info
-    local commit_hash commit_msg changed_files duration
+    # Gather commit info and session summary
+    local commit_hash commit_msg duration summary
     commit_hash="$(git -C "$PROJECT_PATH" log -1 --format='%h' 2>/dev/null || echo 'none')"
     commit_msg="$(git -C "$PROJECT_PATH" log -1 --format='%s' 2>/dev/null || echo 'none')"
-    changed_files="$(git -C "$PROJECT_PATH" diff --name-only "$BASELINE_COMMIT" HEAD 2>/dev/null || echo 'none')"
     duration="$(duration_since "$SESSION_START")"
+
+    log_info "Generating session summary..."
+    summary="$(generate_session_summary)"
 
     # Write build log entry
     cat >> "$PROJECT_DATA_DIR/builds/build_log.md" <<EOF
 
 ## $(date '+%Y-%m-%d %H:%M') | $SESSION_ID
 **Task**: $TASK_DESCRIPTION
+**Summary**:
+$summary
 **Status**: $status
 **Commit**: \`$commit_hash\` — $commit_msg
-**Files Changed**:
-$changed_files
 **Duration**: $duration
 ---
 EOF

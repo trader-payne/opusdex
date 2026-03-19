@@ -31,7 +31,7 @@ Indexes both code AND documentation (`.md`, `.markdown`, `.ipynb`) by default.
 ## Changed Files
 {{DIFF}}
 
-Use `git diff {{BASELINE_COMMIT}} HEAD -- <file>` to inspect the full diff for specific files you need to review closely. Prioritize files with the most changes or highest risk based on the diffstat.
+Use `git diff {{BASELINE_COMMIT}} HEAD -- <file>` to inspect the full diff for specific files you need to review closely. Prioritize files with the most changes or highest risk based on the diffstat. This session continues from the planning phase — you already have files from that exploration in your context. Reference those earlier reads by line number instead of re-reading them. For files you haven't seen, use offset/limit to read only the sections near the changed lines.
 
 ## Test Results
 {{CONTEXT}}
@@ -57,7 +57,7 @@ Session directory: `{{SESSION_TASK_DIR}}`
 Write your review to `{{SESSION_TASK_DIR}}/review.md`:
 
 ```markdown
-# Code Review
+# Code Review — Round {{REVIEW_ROUND}}
 
 ## Summary
 [1-2 sentence overview of the changes]
