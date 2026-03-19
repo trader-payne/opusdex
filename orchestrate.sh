@@ -30,6 +30,7 @@ Options:
   --phase PHASE          Resume from a specific phase
                          (plan|build|review|live|document|commit)
   --auto-live            Skip live pass confirmation prompt
+  --skip-live            Skip live pass entirely (no prompt, no execution)
   --claude-model MODEL   Override Claude model (default: opus)
   --claude-effort LEVEL  Override Claude effort (default: high)
   --codex-model MODEL    Override Codex model (default: gpt-5.4)
@@ -64,6 +65,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         --auto-live)
             AUTO_LIVE=true; shift
+            ;;
+        --skip-live)
+            AUTO_LIVE=skip; shift
             ;;
         --phase)
             START_PHASE="$2"; shift 2

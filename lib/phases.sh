@@ -512,6 +512,11 @@ phase_review_and_live() {
             review_needed=false
         fi
 
+        if [[ "$AUTO_LIVE" == "skip" ]]; then
+            log_info "Skipping live pass (--skip-live)"
+            return 0
+        fi
+
         if [[ "$should_prompt_for_live" == true && "$AUTO_LIVE" != "true" ]]; then
             echo ""
             log_info "Live environment pass — runs the app and checks logs for runtime issues."

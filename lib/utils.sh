@@ -28,8 +28,8 @@ abort() {
 
 confirm() {
     local prompt="${1:-Continue?}"
-    printf "%s [y/N] " "$prompt"
-    read -r answer
+    printf "%s [y/N] " "$prompt" >/dev/tty
+    read -r answer </dev/tty
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 

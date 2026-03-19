@@ -479,11 +479,12 @@ test_orchestrate_allows_missing_gemini_when_live_skipped() {
     create_target_repo "$tmp_dir/project"
     output_file="$tmp_dir/orchestrate_skip_live.log"
 
-    if ! printf 'n\n' | env \
+    if ! env \
         OPUSDEX_DIR="$ROOT_DIR" \
         CLAUDE_BIN="$CLAUDE_BIN" \
         CODEX_BIN="$CODEX_BIN" \
         GEMINI_BIN="$tmp_dir/bin/missing-gemini" \
+        AUTO_LIVE=skip \
         STUB_STATE_DIR="$STUB_STATE_DIR" \
         bash "$ROOT_DIR/orchestrate.sh" "Skip live" --project "$tmp_dir/project" --phase review --auto-commit \
         > "$output_file" 2>&1; then
