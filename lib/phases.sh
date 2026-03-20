@@ -373,15 +373,15 @@ persist_live_feedback() {
 }
 
 require_live_dependencies() {
-    if ! command -v "$GEMINI_BIN" &>/dev/null && [[ ! -x "$GEMINI_BIN" ]]; then
-        log_error "Required command not found: $GEMINI_BIN"
+    if ! command -v "$CURSOR_BIN" &>/dev/null && [[ ! -x "$CURSOR_BIN" ]]; then
+        log_error "Required command not found: $CURSOR_BIN"
         return 1
     fi
 
     return 0
 }
 
-# ─── Live Pass (Gemini, gated) ──────────────────────────────────────────────
+# ─── Live Pass (Cursor, gated) ──────────────────────────────────────────────
 
 phase_live() {
     log_phase "live"
@@ -389,33 +389,36 @@ phase_live() {
     local prompt_file
     prompt_file="$(build_prompt "live")"
 
-    log_info "Invoking Gemini for live environment pass (attempt $LIVE_ATTEMPT)..."
+    log_info "Invoking Cursor agent for live environment pass (attempt $LIVE_ATTEMPT)..."
 
     local output_file="$SESSION_TASK_DIR/live_output_${LIVE_ATTEMPT}.md"
 
-    (cd "$PROJECT_PATH" && "$GEMINI_BIN" \
-        -m "$GEMINI_MODEL" \
-        $GEMINI_YOLO_FLAG \
-        -p "$(cat "$prompt_file")" \
-        -o text) \
+    (cd "$PROJECT_PATH" && "$CURSOR_BIN" \
+        --model "$CURSOR_MODEL" \
+        $CURSOR_YOLO_FLAG \
+        --print \
+        --output-format text \
+        --trust \
+        --approve-mcps \
+        "$(cat "$prompt_file")") \
         > "$output_file" 2>&1
 
     local exit_code=$?
     rm -f "$prompt_file"
 
     if [[ $exit_code -ne 0 ]]; then
-        log_error "Gemini live pass failed (exit $exit_code)"
+        log_error "Cursor live pass failed (exit $exit_code)"
         local failure_source="$output_file"
         if [[ -f "$SESSION_TASK_DIR/live_results.md" ]]; then
             failure_source="$SESSION_TASK_DIR/live_results.md"
         fi
         persist_live_feedback "$failure_source" \
-            "Gemini CLI exited with code $exit_code during live attempt $LIVE_ATTEMPT."
+            "Cursor agent CLI exited with code $exit_code during live attempt $LIVE_ATTEMPT."
         [[ -f "$output_file" ]] && cat "$output_file" >&2
         return 1
     fi
 
-    # Write live_results.md from output if Gemini didn't create it directly
+    # Write live_results.md from output if Cursor didn't create it directly
     if [[ ! -f "$SESSION_TASK_DIR/live_results.md" ]]; then
         cp "$output_file" "$SESSION_TASK_DIR/live_results.md"
     fi
@@ -432,13 +435,13 @@ phase_live() {
         FAIL)
             log_warn "Live pass verdict: FAIL"
             persist_live_feedback "$SESSION_TASK_DIR/live_results.md" \
-                "Gemini reported a failing live validation verdict on attempt $LIVE_ATTEMPT."
+                "Cursor reported a failing live validation verdict on attempt $LIVE_ATTEMPT."
             return 1
             ;;
         *)
             log_warn "Could not parse live verdict — treating as FAIL"
             persist_live_feedback "$SESSION_TASK_DIR/live_results.md" \
-                "Gemini did not produce a parseable live verdict on attempt $LIVE_ATTEMPT."
+                "Cursor did not produce a parseable live verdict on attempt $LIVE_ATTEMPT."
             return 1
             ;;
     esac
@@ -464,7 +467,7 @@ phase_live_inner() {
             clear_live_feedback
 
             if [[ "$pre_live_fingerprint" != "$post_live_fingerprint" ]]; then
-                log_warn "Live pass succeeded, but Gemini changed tracked files during live fixes"
+                log_warn "Live pass succeeded, but Cursor changed tracked files during live fixes"
                 return 2
             fi
 
@@ -472,9 +475,9 @@ phase_live_inner() {
         fi
 
         if [[ $attempt -lt $LIVE_RETRY_LIMIT ]]; then
-            log_info "Live issue found — Gemini will retry (attempt $((attempt + 1))/$LIVE_RETRY_LIMIT)..."
+            log_info "Live issue found — Cursor will retry (attempt $((attempt + 1))/$LIVE_RETRY_LIMIT)..."
         else
-            log_error "Live pass failed after $LIVE_RETRY_LIMIT Gemini attempts"
+            log_error "Live pass failed after $LIVE_RETRY_LIMIT Cursor attempts"
             return 1
         fi
     done
@@ -547,7 +550,7 @@ phase_review_and_live() {
                 review_needed=true
                 ;;
             2)
-                log_warn "Gemini fixed runtime issues during live validation — running tests and review before final live confirmation"
+                log_warn "Cursor fixed runtime issues during live validation — running tests and review before final live confirmation"
                 phase_retest_after_live || return 1
                 review_needed=true
                 ;;

@@ -193,7 +193,7 @@ fi
 exit 0
 EOF
 
-    cat > "$bin_dir/gemini" <<'EOF'
+    cat > "$bin_dir/agent" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -202,10 +202,14 @@ args=("$@")
 index=0
 while [[ $index -lt ${#args[@]} ]]; do
     case "${args[$index]}" in
-        -p|--prompt)
-            index=$((index + 1))
-            prompt="${args[$index]:-}"
+        --model|--output-format|--workspace)
+            index=$((index + 1)) ;;
+        --print|--yolo|--force|--trust|--approve-mcps)
             ;;
+        -*)
+            ;;
+        *)
+            prompt="${args[$index]}" ;;
     esac
     index=$((index + 1))
 done
@@ -213,14 +217,14 @@ done
 state_dir="${STUB_STATE_DIR:?}"
 mkdir -p "$state_dir"
 
-count_file="$state_dir/gemini_count"
+count_file="$state_dir/cursor_count"
 count=0
 [[ -f "$count_file" ]] && count="$(cat "$count_file")"
 count=$((count + 1))
 printf '%s' "$count" > "$count_file"
-printf '%s' "$prompt" > "$state_dir/gemini_prompt_${count}.txt"
+printf '%s' "$prompt" > "$state_dir/cursor_prompt_${count}.txt"
 
-IFS=',' read -r -a actions <<< "${GEMINI_SEQUENCE:-pass_clean}"
+IFS=',' read -r -a actions <<< "${CURSOR_SEQUENCE:-pass_clean}"
 action="${actions[$((count - 1))]:-pass_clean}"
 
 case "$action" in
@@ -241,7 +245,7 @@ case "$action" in
 LIVE_EOF
         ;;
     pass_change)
-        printf 'gemini change %s\n' "$count" >> app.txt
+        printf 'cursor change %s\n' "$count" >> app.txt
         cat <<'LIVE_EOF'
 # Live Environment Results
 
@@ -274,22 +278,22 @@ LIVE_EOF
 LIVE_EOF
         ;;
     exit1)
-        echo "gemini crashed during startup"
+        echo "cursor crashed during startup"
         exit 1
         ;;
     *)
-        echo "Unknown Gemini stub action: $action" >&2
+        echo "Unknown Cursor stub action: $action" >&2
         exit 1
         ;;
 esac
 EOF
 
-    chmod +x "$bin_dir/claude" "$bin_dir/codex" "$bin_dir/gemini"
+    chmod +x "$bin_dir/claude" "$bin_dir/codex" "$bin_dir/agent"
 
     export STUB_STATE_DIR="$tmp_dir/state"
     export CLAUDE_BIN="$bin_dir/claude"
     export CODEX_BIN="$bin_dir/codex"
-    export GEMINI_BIN="$bin_dir/gemini"
+    export CURSOR_BIN="$bin_dir/agent"
 }
 
 load_libs() {
@@ -440,13 +444,13 @@ test_post_live_change_requires_retest_and_second_live() {
     export REVIEW_RETRY_LIMIT=0
     export LIVE_RETRY_LIMIT=1
     export LIVE_REVIEW_LIMIT=2
-    export GEMINI_SEQUENCE="pass_change,pass_clean"
+    export CURSOR_SEQUENCE="pass_change,pass_clean"
 
     phase_review_and_live "normal"
 
     assert_equals "2" "$(read_counter "$STUB_STATE_DIR/claude_review_count")"
     assert_equals "1" "$(read_counter "$STUB_STATE_DIR/codex_post_live_count")"
-    assert_equals "2" "$(read_counter "$STUB_STATE_DIR/gemini_count")"
+    assert_equals "2" "$(read_counter "$STUB_STATE_DIR/cursor_count")"
 
     rm -rf "$tmp_dir"
 }
@@ -461,18 +465,18 @@ test_live_resume_failure_falls_back_to_review_with_feedback() {
     export REVIEW_RETRY_LIMIT=0
     export LIVE_RETRY_LIMIT=1
     export LIVE_REVIEW_LIMIT=2
-    export GEMINI_SEQUENCE="fail_verdict,pass_clean"
+    export CURSOR_SEQUENCE="fail_verdict,pass_clean"
 
     phase_review_and_live "live_resume"
 
     assert_equals "1" "$(read_counter "$STUB_STATE_DIR/claude_review_count")"
-    assert_equals "2" "$(read_counter "$STUB_STATE_DIR/gemini_count")"
-    assert_file_contains "$STUB_STATE_DIR/claude_review_prompt_1.txt" "Gemini reported a failing live validation verdict"
+    assert_equals "2" "$(read_counter "$STUB_STATE_DIR/cursor_count")"
+    assert_file_contains "$STUB_STATE_DIR/claude_review_prompt_1.txt" "Cursor reported a failing live validation verdict"
 
     rm -rf "$tmp_dir"
 }
 
-test_orchestrate_allows_missing_gemini_when_live_skipped() {
+test_orchestrate_allows_missing_cursor_when_live_skipped() {
     local tmp_dir output_file
     tmp_dir="$(mktemp -d)"
     create_stubs "$tmp_dir"
@@ -483,7 +487,7 @@ test_orchestrate_allows_missing_gemini_when_live_skipped() {
         OPUSDEX_DIR="$ROOT_DIR" \
         CLAUDE_BIN="$CLAUDE_BIN" \
         CODEX_BIN="$CODEX_BIN" \
-        GEMINI_BIN="$tmp_dir/bin/missing-gemini" \
+        CURSOR_BIN="$tmp_dir/bin/missing-agent" \
         AUTO_LIVE=skip \
         STUB_STATE_DIR="$STUB_STATE_DIR" \
         bash "$ROOT_DIR/orchestrate.sh" "Skip live" --project "$tmp_dir/project" --phase review --auto-commit \
@@ -493,7 +497,7 @@ test_orchestrate_allows_missing_gemini_when_live_skipped() {
     fi
 
     if rg -Fq "Required command not found" "$output_file"; then
-        echo "Gemini should not be required when live is skipped" >&2
+        echo "Cursor should not be required when live is skipped" >&2
         cat "$output_file" >&2
         return 1
     fi
@@ -501,7 +505,7 @@ test_orchestrate_allows_missing_gemini_when_live_skipped() {
     rm -rf "$tmp_dir"
 }
 
-test_orchestrate_fails_when_live_entered_without_gemini() {
+test_orchestrate_fails_when_live_entered_without_cursor() {
     local tmp_dir output_file
     tmp_dir="$(mktemp -d)"
     create_stubs "$tmp_dir"
@@ -512,17 +516,17 @@ test_orchestrate_fails_when_live_entered_without_gemini() {
         OPUSDEX_DIR="$ROOT_DIR" \
         CLAUDE_BIN="$CLAUDE_BIN" \
         CODEX_BIN="$CODEX_BIN" \
-        GEMINI_BIN="$tmp_dir/bin/missing-gemini" \
+        CURSOR_BIN="$tmp_dir/bin/missing-agent" \
         STUB_STATE_DIR="$STUB_STATE_DIR" \
         AUTO_LIVE=true \
         bash "$ROOT_DIR/orchestrate.sh" "Run live" --project "$tmp_dir/project" --phase live --auto-commit \
         > "$output_file" 2>&1; then
-        echo "orchestrate.sh unexpectedly succeeded without Gemini" >&2
+        echo "orchestrate.sh unexpectedly succeeded without Cursor" >&2
         cat "$output_file" >&2
         return 1
     fi
 
-    assert_file_contains "$output_file" "Required command not found: $tmp_dir/bin/missing-gemini"
+    assert_file_contains "$output_file" "Required command not found: $tmp_dir/bin/missing-agent"
 
     rm -rf "$tmp_dir"
 }
@@ -546,8 +550,8 @@ run_test "memory curation header-only output falls back safely" test_memory_cura
 run_test "legacy memory migrates into shared context" test_legacy_memory_migrates_into_shared_context
 run_test "live changes trigger post-live retest and second live pass" test_post_live_change_requires_retest_and_second_live
 run_test "live resume failure falls back to review with feedback" test_live_resume_failure_falls_back_to_review_with_feedback
-run_test "orchestrate skips Gemini when live is declined" test_orchestrate_allows_missing_gemini_when_live_skipped
-run_test "orchestrate fails at live entry when Gemini is missing" test_orchestrate_fails_when_live_entered_without_gemini
+run_test "orchestrate allows missing Cursor when live skipped" test_orchestrate_allows_missing_cursor_when_live_skipped
+run_test "orchestrate fails at live entry when Cursor is missing" test_orchestrate_fails_when_live_entered_without_cursor
 
 printf '\nPassed: %d\n' "$PASS_COUNT"
 printf 'Failed: %d\n' "$FAIL_COUNT"

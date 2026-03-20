@@ -1,6 +1,6 @@
 # OpusDex
 
-OpusDex is a Bash-based AI development orchestrator. It runs a target Git repository through a structured workflow that combines Claude Code CLI for planning and review, OpenAI Codex CLI for implementation/testing/documentation/commit creation, and an optional Gemini CLI live-validation pass.
+OpusDex is a Bash-based AI development orchestrator. It runs a target Git repository through a structured workflow that combines Claude Code CLI for planning and review, OpenAI Codex CLI for implementation/testing/documentation/commit creation, and an optional Cursor agent CLI live-validation pass.
 
 The orchestrator itself lives in this repository. Session state, memory, logs, and build history are written into the target project under `.opusdex/`, so each project keeps its own execution history.
 
@@ -45,9 +45,9 @@ The current top-level phase order is:
 | Plan | Claude Code CLI | Interactive | Explore the target repo with the user and write an implementation plan | `todo.md` |
 | Build | Codex CLI | Non-interactive exec | Apply the agreed plan and run tests in one session | `build_output.md`, `test_results.md` |
 | Review | Claude Code CLI | Non-interactive JSON output | Review the diff and produce a verdict | `review_output.json`, `review.md` |
-| Live | Gemini CLI | Non-interactive prompt | Run the app, inspect logs, smoke-test, and optionally attempt targeted runtime fixes | `live_output_<n>.md`, `live_results.md`, `live_feedback.md` |
+| Live | Cursor agent CLI | Non-interactive prompt | Run the app, inspect logs, smoke-test, and optionally attempt targeted runtime fixes | `live_output_<n>.md`, `live_results.md`, `live_feedback.md` |
 | Fix | Codex CLI | Non-interactive exec | Address review feedback and retest | `fix_output.md`, `test_results.md` |
-| Post-Live Verify | Codex CLI | Non-interactive exec | Re-run formal tests after Gemini-authored live fixes | `retest_after_live_output.md`, `test_results.md` |
+| Post-Live Verify | Codex CLI | Non-interactive exec | Re-run formal tests after Cursor-authored live fixes | `retest_after_live_output.md`, `test_results.md` |
 | Document | Codex CLI | Non-interactive exec | Update documentation or comments | `document_output.md` |
 | Commit | Codex CLI | Non-interactive exec | Stage relevant files and create a local commit | `commit_output.md` |
 
@@ -56,9 +56,9 @@ The current top-level phase order is:
 - `review` is wrapped by `phase_review_with_gate`.
 - If review returns `REQUEST_CHANGES` or `BLOCK` and retries remain, OpusDex runs `fix`, then re-reviews.
 - The live pass is optional unless `--auto-live` or `--phase live` is used.
-- Inside the live pass, Gemini gets up to `LIVE_RETRY_LIMIT` attempts to diagnose, fix, restart, and revalidate runtime issues.
-- If Gemini still fails, OpusDex feeds the live failure context into Claude review, runs Codex fixes if needed, then re-enters live validation. That outer review/live loop is capped by `LIVE_REVIEW_LIMIT`.
-- If Gemini gets the app healthy by changing tracked files, OpusDex runs a formal Codex verification pass, re-reviews the diff, and then requires one more clean live validation pass before continuing.
+- Inside the live pass, Cursor gets up to `LIVE_RETRY_LIMIT` attempts to diagnose, fix, restart, and revalidate runtime issues.
+- If Cursor still fails, OpusDex feeds the live failure context into Claude review, runs Codex fixes if needed, then re-enters live validation. That outer review/live loop is capped by `LIVE_REVIEW_LIMIT`.
+- If Cursor gets the app healthy by changing tracked files, OpusDex runs a formal Codex verification pass, re-reviews the diff, and then requires one more clean live validation pass before continuing.
 - `commit` is gated by a confirmation prompt unless `--auto-commit` is used.
 
 ## Requirements
@@ -70,7 +70,7 @@ OpusDex assumes a Unix-like environment with standard shell utilities. Based on 
 - `jq`
 - Claude Code CLI
 - OpenAI Codex CLI
-- Gemini CLI, only when the live pass is enabled
+- Cursor agent CLI, only when the live pass is enabled
 - Standard utilities such as `cat`, `date`, `grep`, `head`, `mktemp`, `sed`, `seq`, `tail`, `tee`, and `tr`
 
 The target project must already be a Git repository.
@@ -81,7 +81,7 @@ There is no installer script in this repository. Setup is manual:
 
 1. Clone this repository.
 2. Review and edit [`config.env`](/root/github/opusdex/config.env).
-3. Make sure the configured Claude and Codex CLI binaries exist and are authenticated. If you plan to use the live pass, Gemini CLI should also be installed and authenticated.
+3. Make sure the configured Claude and Codex CLI binaries exist and are authenticated. If you plan to use the live pass, Cursor agent CLI should also be installed and authenticated.
 4. Run [`orchestrate.sh`](/root/github/opusdex/orchestrate.sh) against a target project.
 
 The current default configuration is:
@@ -92,7 +92,7 @@ The current default configuration is:
 | `CLAUDE_EFFORT` | `high` |
 | `CODEX_MODEL` | `gpt-5.4` |
 | `CODEX_EFFORT` | `xhigh` |
-| `GEMINI_MODEL` | `gemini-3.1-pro-preview` |
+| `CURSOR_MODEL` | `composer-2` |
 | `AUTO_PLAN` | `false` |
 | `AUTO_LIVE` | `false` |
 | `AUTO_COMMIT` | `false` |
@@ -101,13 +101,13 @@ The current default configuration is:
 | `LIVE_RETRY_LIMIT` | `3` |
 | `LIVE_REVIEW_LIMIT` | `2` |
 | `CODEX_YOLO_FLAG` | `--yolo` |
-| `GEMINI_YOLO_FLAG` | `--yolo` |
+| `CURSOR_YOLO_FLAG` | `--yolo` |
 
 Default binary paths are also defined in [`config.env`](/root/github/opusdex/config.env):
 
 - `CLAUDE_BIN="/root/.local/bin/claude"`
 - `CODEX_BIN="/root/.nvm/versions/node/v25.8.1/bin/codex"`
-- `GEMINI_BIN="/root/.nvm/versions/node/v25.8.1/bin/gemini"`
+- `CURSOR_BIN="/root/.local/bin/agent"`
 
 `config.env` respects pre-set environment variables, so tests or wrapper scripts can override these defaults without editing the file.
 
@@ -130,7 +130,7 @@ Default binary paths are also defined in [`config.env`](/root/github/opusdex/con
 | `--claude-effort LEVEL` | Override Claude reasoning effort. |
 | `--codex-model MODEL` | Override the Codex model for this run. |
 | `--codex-effort LEVEL` | Override Codex reasoning effort. |
-| `--gemini-model MODEL` | Override the Gemini model for the live pass. |
+| `--cursor-model MODEL` | Override the Cursor agent model for the live pass (default: `composer-2`). |
 | `-h`, `--help` | Show usage text. |
 
 ### Example Commands
@@ -189,7 +189,7 @@ For most phases, OpusDex:
 1. Loads a template from `prompts/<phase>.md`.
 2. Replaces placeholder variables.
 3. Writes the final prompt to a temporary file in `/tmp`.
-4. Passes the prompt text to Claude, Codex, or Gemini.
+4. Passes the prompt text to Claude, Codex, or Cursor.
 
 Plan is special: it uses separate system and task prompts from [`prompts/plan_system.md`](/root/github/opusdex/prompts/plan_system.md) and [`prompts/plan_task.md`](/root/github/opusdex/prompts/plan_task.md).
 
@@ -315,19 +315,19 @@ Current execution behavior:
 - every Codex phase passes the configured reasoning effort
 - every Codex phase uses the configured YOLO flag, which defaults to `--yolo`
 
-### Gemini Usage
+### Cursor Usage
 
-Gemini is used for:
+Cursor agent CLI is used for:
 
 - optional live validation
 - runtime diagnosis and targeted live-fix attempts
 
 Current execution behavior:
 
-- Gemini is only required when the live phase is actually entered
+- Cursor is only required when the live phase is actually entered
 - the live phase runs from the target project directory
-- Gemini may retry runtime fixes up to `LIVE_RETRY_LIMIT`
-- if Gemini changes tracked files and reaches a passing live verdict, OpusDex runs a Codex verification pass and a Claude review before requiring one more clean live pass
+- Cursor may retry runtime fixes up to `LIVE_RETRY_LIMIT`
+- if Cursor changes tracked files and reaches a passing live verdict, OpusDex runs a Codex verification pass and a Claude review before requiring one more clean live pass
 
 ## Project-Defined Agents and Skills
 

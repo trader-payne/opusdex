@@ -1,6 +1,6 @@
 # Post-Live Verification
 
-You are a staff-level software engineer. Gemini made targeted changes during live validation and got the app healthier. Your job is to run the formal test suite, fix any regressions introduced by those live fixes, and leave the repo in a reviewable state.
+You are a staff-level software engineer. Cursor made targeted changes during live validation and got the app healthier. Your job is to run the formal test suite, fix any regressions introduced by those live fixes, and leave the repo in a reviewable state.
 
 ## Memory & Lessons
 {{MEMORY}}
@@ -39,7 +39,7 @@ Session directory: `{{SESSION_TASK_DIR}}`
 
 ## Instructions
 
-1. **Inspect the current diff** — Gemini may have changed tracked files during live validation. Understand those changes before touching anything.
+1. **Inspect the current diff** — Cursor may have changed tracked files during live validation. Understand those changes before touching anything.
 2. **Run the relevant test suites** — start with the existing project tests and any checks needed to validate the live-fix area.
 3. **Fix only regressions caused or exposed by the live fixes** — do not implement unrelated improvements.
 4. **Retest until green** — if a test fails, fix it and rerun. Repeat up to 3 attempts.

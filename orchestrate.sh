@@ -35,7 +35,7 @@ Options:
   --claude-effort LEVEL  Override Claude effort (default: high)
   --codex-model MODEL    Override Codex model (default: gpt-5.4)
   --codex-effort LEVEL   Override Codex effort (default: xhigh)
-  --gemini-model MODEL   Override Gemini model (default: gemini-3.1-pro-preview)
+  --cursor-model MODEL   Override Cursor agent model for live pass (default: composer-2)
   -h, --help             Show this help message
 EOF
     exit 0
@@ -84,8 +84,8 @@ while [[ $# -gt 0 ]]; do
         --codex-effort)
             CODEX_EFFORT="$2"; shift 2
             ;;
-        --gemini-model)
-            GEMINI_MODEL="$2"; shift 2
+        --cursor-model)
+            CURSOR_MODEL="$2"; shift 2
             ;;
         -*)
             abort "Unknown option: $1"
@@ -177,7 +177,7 @@ log_info "Project:  $PROJECT_PATH"
 log_info "Baseline: $BASELINE_COMMIT"
 log_info "Claude:   $CLAUDE_MODEL (effort: $CLAUDE_EFFORT)"
 log_info "Codex:    $CODEX_MODEL (effort: $CODEX_EFFORT)"
-log_info "Gemini:   $GEMINI_MODEL"
+log_info "Cursor:   $CURSOR_MODEL"
 log_info "Auto-plan: $AUTO_PLAN"
 log_info "Auto-live: $AUTO_LIVE"
 log_info "Auto-commit: $AUTO_COMMIT"
