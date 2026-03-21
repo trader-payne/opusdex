@@ -166,7 +166,6 @@ phase_review() {
         --model "$CLAUDE_MODEL"
         --effort "$CLAUDE_EFFORT"
         --dangerously-skip-permissions
-        --output-format json
     )
 
     if [[ -n "$CLAUDE_SESSION_ID" ]]; then
@@ -178,9 +177,9 @@ phase_review() {
 
     # Run from project dir so Claude auto-discovers .claude/agents/, .claude/skills/, CLAUDE.md
     (cd "$PROJECT_PATH" && "$CLAUDE_BIN" "${claude_args[@]}") \
-        > "$output_file" 2>&1
+        2>&1 | tee "$output_file"
 
-    local exit_code=$?
+    local exit_code=${PIPESTATUS[0]}
     rm -f "$prompt_file"
 
     if [[ $exit_code -ne 0 ]]; then
@@ -401,9 +400,9 @@ phase_live() {
         --trust \
         --approve-mcps \
         "$(cat "$prompt_file")") \
-        > "$output_file" 2>&1
+        2>&1 | tee "$output_file"
 
-    local exit_code=$?
+    local exit_code=${PIPESTATUS[0]}
     rm -f "$prompt_file"
 
     if [[ $exit_code -ne 0 ]]; then
