@@ -133,15 +133,26 @@ You will receive the current shared context (existing rules) and new lessons fro
 5. **Keeps** the file header (`# Shared Context` + description line) intact
 6. **Stays under 50 rules total** — if over, prioritize the most specific and actionable ones
 
-Output the complete updated file. No commentary, no explanations — just the file content.
+Output ONLY the raw file content. No markdown fences, no commentary, no explanations.
 PROMPT_EOF
 )"
 
     prompt+=$'\n\n'"## Current Shared Context"$'\n'"$existing_memory"
     prompt+=$'\n\n'"## New Lessons from This Session"$'\n'"$new_lessons"
 
-    local result
-    result="$("$CLAUDE_BIN" --print -p "$prompt" --model haiku --output-format text 2>/dev/null)" || true
+    local result stderr_output
+    stderr_output="$(mktemp /tmp/opusdex_curate_err_XXXXXX)"
+    result="$("$CLAUDE_BIN" --print -p "$prompt" --model haiku --output-format text 2>"$stderr_output")" || true
+
+    if [[ -z "$result" && -s "$stderr_output" ]]; then
+        log_warn "Claude curation stderr: $(head -5 "$stderr_output")"
+    fi
+    rm -f "$stderr_output"
+
+    # Strip markdown fences that LLMs commonly wrap output in
+    result="$(printf '%s' "$result" | sed '/^```\(markdown\)\?$/d')"
+    # Trim leading blank lines
+    result="$(printf '%s' "$result" | sed '/./,$!d')"
 
     printf '%s' "$result"
 }
@@ -152,8 +163,7 @@ validate_curated_memory() {
     local new_lessons="$3"
 
     [[ -n "$candidate" ]] || return 1
-    grep -q "^# Shared Context$" <<<"$candidate" || return 1
-    grep -q "^> Project knowledge shared between Claude Code and Codex\\.$" <<<"$candidate" || return 1
+    grep -q "^# Shared Context" <<<"$candidate" || return 1
 
     if { has_rule_blocks "$existing_memory" || has_rule_blocks "$new_lessons"; } \
         && ! has_rule_blocks "$candidate"; then
@@ -211,6 +221,13 @@ merge_session_lessons() {
         log_success "Shared context curated and updated"
     else
         log_warn "AI curation failed — falling back to blind merge"
+        if [[ -z "$curated" ]]; then
+            log_warn "  Reason: Claude returned empty output"
+        elif ! grep -q "^# Shared Context" <<<"$curated"; then
+            log_warn "  Reason: missing '# Shared Context' header (got: $(head -1 <<<"$curated"))"
+        else
+            log_warn "  Reason: output has no rule blocks"
+        fi
         merge_lessons_fallback "$lessons_file" "$shared_file"
     fi
 }
