@@ -28,8 +28,13 @@ abort() {
 
 confirm() {
     local prompt="${1:-Continue?}"
+    local answer
+    # Restore terminal settings that CLI subprocesses (Claude, Codex) may corrupt
+    stty echo icrnl icanon </dev/tty 2>/dev/null
     printf "%s [y/N] " "$prompt" >/dev/tty
     read -r answer </dev/tty
+    # Strip trailing carriage return (safety net for terminal state issues)
+    answer="${answer%$'\r'}"
     [[ "$answer" =~ ^[Yy]$ ]]
 }
 
